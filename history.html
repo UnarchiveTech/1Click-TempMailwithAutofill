@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Email History - OneClickAutofill with TempMail</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    h2 {
+      color: #333;
+      margin-top: 0;
+    }
+    .email-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .email-item {
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .email-item:last-child {
+      border-bottom: none;
+    }
+    .email-address {
+      color: #2196F3;
+    }
+    .timestamp {
+      color: #666;
+      font-size: 0.9em;
+    }
+    .no-emails {
+      text-align: center;
+      color: #666;
+      padding: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Previously Used Email Addresses</h2>
+    <div id="emailList" class="email-list">
+      <div class="no-emails">Loading...</div>
+    </div>
+  </div>
+  <script src="history.js"></script>
+</body>
+</html>
