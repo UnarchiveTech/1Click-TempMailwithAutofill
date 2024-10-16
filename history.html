@@ -2,24 +2,38 @@
 <html>
 <head>
   <title>Email History - OneClickAutofill with TempMail</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     body {
-      font-family: Arial, sans-serif;
+      width: auto;
       margin: 0;
       padding: 20px;
-      background-color: #f5f5f5;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+      transition: background-color 0.3s, color 0.3s;
     }
     .container {
       max-width: 600px;
       margin: 0 auto;
-      background-color: white;
+      background-color: var(--bg-secondary);
       padding: 20px;
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 2px 4px var(--shadow-color);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-color);
     }
     h2 {
-      color: #333;
-      margin-top: 0;
+      color: var(--text-primary);
+      margin: 0;
+      font-weight: 500;
     }
     .email-list {
       list-style: none;
@@ -27,32 +41,57 @@
       margin: 0;
     }
     .email-item {
-      padding: 12px;
-      border-bottom: 1px solid #eee;
+      padding: 16px;
+      margin: 8px 0;
+      border-radius: 8px;
+      background-color: var(--bg-tertiary);
       display: flex;
       justify-content: space-between;
       align-items: center;
+      transition: all 0.2s;
     }
-    .email-item:last-child {
-      border-bottom: none;
+    .email-item:hover {
+      background-color: var(--bg-primary);
+      box-shadow: 0 2px 4px var(--shadow-color);
     }
     .email-address {
-      color: #2196F3;
+      color: var(--primary-color);
+      font-weight: 500;
+      word-break: break-all;
     }
     .timestamp {
-      color: #666;
+      color: var(--text-secondary);
       font-size: 0.9em;
+      white-space: nowrap;
+      margin-left: 16px;
     }
     .no-emails {
       text-align: center;
-      color: #666;
+      color: var(--text-secondary);
       padding: 20px;
+      background-color: var(--bg-tertiary);
+      border-radius: 8px;
+      margin-top: 16px;
+    }
+    .theme-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--primary-color);
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>Previously Used Email Addresses</h2>
+    <div class="header">
+      <h2>Email History</h2>
+      <button id="themeToggle" class="icon-button" title="Toggle Theme">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+      </button>
+    </div>
     <div id="emailList" class="email-list">
       <div class="no-emails">Loading...</div>
     </div>

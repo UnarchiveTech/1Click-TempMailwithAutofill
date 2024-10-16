@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', async () => {
+  // DOM Elements
   const tempEmailElement = document.getElementById('tempEmail');
   const startSignupButton = document.getElementById('startSignup');
   const refreshEmailButton = document.getElementById('refreshEmail');
@@ -12,48 +13,212 @@ document.addEventListener('DOMContentLoaded', async () => {
   const latestOtpContainer = document.getElementById('latestOtpContainer');
   const latestOtpCode = document.getElementById('latestOtpCode');
   const copyOtpButton = document.getElementById('copyOtpButton');
-  const historyButton = document.createElement('button');
-  historyButton.id = 'historyButton';
-  historyButton.className = 'icon-button';
-  historyButton.title = 'View Email History';
-  historyButton.innerHTML = '<img src="icons/history.svg" alt="History" width="16" height="16">';
-  document.querySelector('#emailContainer').appendChild(historyButton);
+  const historyButton = document.getElementById('historyButton');
+  const reportIssueButton = document.getElementById('reportIssue');
+  const loginInfoSection = document.querySelector('.login-info-section');
+  const savedLoginInfo = document.getElementById('savedLoginInfo');
+  const exportDataButton = document.getElementById('exportData');
+  const importDataButton = document.getElementById('importData');
+  let loginInfoViewActive = false;
 
-  // Add click handler for history button
+  // Create hidden file input for import
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = '.json';
+  fileInput.style.display = 'none';
+  document.body.appendChild(fileInput);
+
+  // Add click handler for history button - toggle history view in popup
+  const historySection = document.querySelector('.history-section');
+  const emailHistoryList = document.getElementById('emailHistoryList');
+  const mainContent = document.querySelector('.container');
+  let historyViewActive = false;
+  
+  // Add click handler for login info button - toggle login info view in popup
+  const loginInfoButton = document.getElementById('loginInfoButton');
+  
+  loginInfoButton.addEventListener('click', () => {
+    loginInfoViewActive = !loginInfoViewActive;
+    
+    if (loginInfoViewActive) {
+      // Update login info before showing
+      updateSavedLoginInfo();
+      
+      // Show login info section in full popup
+      loginInfoSection.style.display = 'block';
+      loginInfoSection.classList.add('fullscreen');
+      
+      // Add back button if it doesn't exist
+      if (!document.getElementById('loginInfoBackButton')) {
+        const backButton = document.createElement('button');
+        backButton.id = 'loginInfoBackButton';
+        backButton.className = 'back-button';
+        backButton.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Back
+        `;
+        backButton.addEventListener('click', () => {
+          loginInfoViewActive = false;
+          loginInfoSection.classList.remove('fullscreen');
+          loginInfoSection.style.display = 'none';
+          if (document.getElementById('loginInfoBackButton')) {
+            document.getElementById('loginInfoBackButton').remove();
+          }
+        });
+        loginInfoSection.insertBefore(backButton, loginInfoSection.firstChild);
+      }
+    }
+  });
+  
   historyButton.addEventListener('click', () => {
-    chrome.windows.create({
-      url: 'history.html',
-      type: 'popup',
-      width: 600,
-      height: 600
+    historyViewActive = !historyViewActive;
+    
+    if (historyViewActive) {
+      // Update email history before showing
+      updateEmailHistory();
+      
+      // Show history section in full popup using CSS class
+      historySection.style.display = 'block';
+      historySection.classList.add('fullscreen');
+      
+      // Add back button if it doesn't exist
+      if (!document.getElementById('historyBackButton')) {
+        const backButton = document.createElement('button');
+        backButton.id = 'historyBackButton';
+        backButton.className = 'back-button';
+        backButton.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Back
+        `;
+        backButton.addEventListener('click', () => {
+          historyViewActive = false;
+          historySection.classList.remove('fullscreen');
+          historySection.style.display = 'none';
+          if (document.getElementById('historyBackButton')) {
+            document.getElementById('historyBackButton').remove();
+          }
+        });
+        historySection.insertBefore(backButton, historySection.firstChild);
+      }
+    }
+  });
+  
+  // Add click handler for report issue button
+  reportIssueButton.addEventListener('click', () => {
+    chrome.tabs.create({
+      url: 'https://github.com/TejasMate/1Click-Autofill-with-Temp-Mail/issues/new'
     });
   });
 
+  // Add click handler for export data button
+  exportDataButton.addEventListener('click', async () => {
+    const result = await window.dataManager.exportData();
+    if (result.success) {
+      updateStatus('Data exported successfully');
+    } else {
+      updateStatus('Failed to export data: ' + result.error, true);
+    }
+  });
+
+  // Add click handler for import data button
+  importDataButton.addEventListener('click', () => {
+    fileInput.click();
+  });
+
+  // Add change handler for file input
+  fileInput.addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      const result = await window.dataManager.importData(file);
+      if (result.success) {
+        updateStatus('Data imported successfully');
+        // Refresh displayed data
+        updateEmailHistory();
+        updateSavedLoginInfo();
+      } else {
+        updateStatus('Failed to import data: ' + result.error, true);
+      }
+    } catch (error) {
+      updateStatus('Error importing data: ' + error.message, true);
+    } finally {
+      // Reset file input
+      fileInput.value = '';
+    }
+  });
+
   // Theme toggle functionality
-  let isDarkMode = false;
-  themeToggleButton.addEventListener('click', () => {
+  const initializeTheme = async () => {
+    try {
+      const { darkMode } = await chrome.storage.local.get(['darkMode']);
+      if (darkMode === true) {
+        document.body.classList.add('dark-mode');
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error getting theme preference:', error);
+      return false;
+    }
+  };
+
+  // Initialize theme
+  let isDarkMode = await initializeTheme();
+
+  // Theme toggle handler
+  themeToggleButton.addEventListener('click', async () => {
     isDarkMode = !isDarkMode;
-    document.body.style.backgroundColor = isDarkMode ? '#1a1a1a' : '#ffffff';
-    document.body.style.color = isDarkMode ? '#ffffff' : '#000000';
-    const elements = document.querySelectorAll('.temp-email, .message-item, .message-content');
-    elements.forEach(el => {
-      el.style.backgroundColor = isDarkMode ? '#2d2d2d' : '#f5f5f5';
-    });
     
-    // Update OTP container theme
-    if (latestOtpContainer.style.display !== 'none') {
-      latestOtpContainer.style.backgroundColor = isDarkMode ? '#0d47a1' : '#e3f2fd';
-      latestOtpContainer.style.borderColor = isDarkMode ? '#90caf9' : '#2196F3';
-      document.querySelector('.latest-otp-display').style.backgroundColor = isDarkMode ? '#1a237e' : 'white';
-      document.querySelector('.latest-otp-title').style.color = isDarkMode ? '#90caf9' : '#1565C0';
-      latestOtpCode.style.color = isDarkMode ? '#e3f2fd' : '#1565C0';
+    if (isDarkMode) {
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+    
+    // Save theme preference
+    try {
+      await chrome.storage.local.set({ darkMode: isDarkMode });
+    } catch (error) {
+      console.error('Error saving theme preference:', error);
     }
   });
 
   // Function to update status
+  function showToast(message, isError = false) {
+    // Create toast container if it doesn't exist
+    let toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) {
+      toastContainer = document.createElement('div');
+      toastContainer.className = 'toast-container';
+      document.body.appendChild(toastContainer);
+    }
+
+    // Create new toast
+    const toast = document.createElement('div');
+    toast.className = `toast ${isError ? 'error' : 'success'}`;
+    toast.textContent = message;
+
+    // Add toast to container
+    toastContainer.appendChild(toast);
+
+    // Trigger animation
+    setTimeout(() => toast.classList.add('show'), 10);
+
+    // Remove toast after 3 seconds
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
+  // Replace all updateStatus calls with showToast
   function updateStatus(message, isError = false) {
-    statusElement.textContent = message;
-    statusElement.className = `status ${isError ? 'error' : 'success'}`;
+    showToast(message, isError);
   }
 
   // Function to copy text to clipboard
@@ -80,22 +245,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (otp) {
       latestOtpContainer.style.display = 'block';
       latestOtpCode.textContent = otp;
-      
-      // Apply theme if dark mode is active
-      if (isDarkMode) {
-        latestOtpContainer.style.backgroundColor = '#0d47a1';
-        latestOtpContainer.style.borderColor = '#90caf9';
-        document.querySelector('.latest-otp-display').style.backgroundColor = '#1a237e';
-        document.querySelector('.latest-otp-title').style.color = '#90caf9';
-        latestOtpCode.style.color = '#e3f2fd';
-      } else {
-        // Ensure light mode styling is applied
-        latestOtpContainer.style.backgroundColor = '#e3f2fd';
-        latestOtpContainer.style.borderColor = '#2196F3';
-        document.querySelector('.latest-otp-display').style.backgroundColor = 'white';
-        document.querySelector('.latest-otp-title').style.color = '#1565C0';
-        latestOtpCode.style.color = '#1565C0';
-      }
+      // CSS classes handle the styling based on theme
     } else {
       latestOtpContainer.style.display = 'none';
       latestOtpCode.textContent = '------';
@@ -417,7 +567,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Function to initialize temporary email
+  // Function to update email history in popup
   async function updateEmailHistory() {
       const emailHistoryList = document.getElementById('emailHistoryList');
       try {
@@ -430,22 +580,183 @@ document.addEventListener('DOMContentLoaded', async () => {
   
         // Sort emails by timestamp, most recent first
         emailHistory.sort((a, b) => b.timestamp - a.timestamp);
+        
+        // Check if we're in full history view mode
+        const isFullView = historyViewActive;
+        // Limit number of emails in mini view, show all in full view
+        const emailsToShow = isFullView ? emailHistory : emailHistory.slice(0, 5);
   
         // Display emails
-        emailHistoryList.innerHTML = emailHistory
+        emailHistoryList.innerHTML = emailsToShow
           .map(entry => `
-            <div class="email-history-item">
+            <div class="email-history-item ${isFullView ? 'full-view' : ''}">
               <span class="email-history-address">${entry.email}</span>
               <span class="email-history-timestamp">${new Date(entry.timestamp).toLocaleString()}</span>
             </div>
           `)
           .join('');
+          
+        // Add a "View all" link if in mini view and there are more emails
+        if (!isFullView && emailHistory.length > 5) {
+          const viewAllLink = document.createElement('div');
+          viewAllLink.className = 'view-all-link';
+          viewAllLink.textContent = `View all (${emailHistory.length})`;
+          viewAllLink.addEventListener('click', () => {
+            historyButton.click(); // Trigger the history button click
+          });
+          emailHistoryList.appendChild(viewAllLink);
+        }
   
       } catch (error) {
         console.error('Error loading email history:', error);
         emailHistoryList.innerHTML = '<div class="email-history-item">Error loading email history</div>';
       }
     }
+    
+  // Function to update saved login information
+  async function updateSavedLoginInfo() {
+    const savedLoginInfoElement = document.getElementById('savedLoginInfo');
+    const loginInfoSection = document.querySelector('.login-info-section');
+    try {
+      // Get credentials history instead of single credential
+      const { credentialsHistory = [] } = await chrome.storage.local.get(['credentialsHistory']);
+      
+      if (credentialsHistory.length === 0) {
+        savedLoginInfoElement.innerHTML = '<div class="login-info-item">No saved login information</div>';
+        return;
+      }
+      
+      // Group credentials by domain
+      const credentialsByDomain = {};
+      credentialsHistory.forEach(cred => {
+        const domain = cred.domain || 'Unknown Website';
+        if (!credentialsByDomain[domain]) {
+          credentialsByDomain[domain] = [];
+        }
+        credentialsByDomain[domain].push(cred);
+      });
+      
+      // Generate HTML for all credentials grouped by domain
+      const allCredentialsHTML = Object.entries(credentialsByDomain).map(([domain, credentials]) => {
+        // Sort credentials by timestamp (newest first)
+        credentials.sort((a, b) => b.timestamp - a.timestamp);
+        
+        // Generate HTML for each credential entry
+        const credentialsHTML = credentials.map(cred => {
+          const credentialFields = [];
+          
+          if (cred.email) {
+            credentialFields.push({
+              label: 'Email',
+              value: cred.email
+            });
+          }
+          
+          if (cred.username) {
+            credentialFields.push({
+              label: 'Username',
+              value: cred.username
+            });
+          }
+          
+          if (cred.name) {
+            credentialFields.push({
+              label: 'Name',
+              value: cred.name
+            });
+          }
+          
+          if (cred.password) {
+            credentialFields.push({
+              label: 'Password',
+              value: cred.password
+            });
+          }
+          
+          const fieldsHTML = credentialFields.map(field => `
+            <div class="login-info-field">
+              <span class="login-info-label">${field.label}:</span>
+              <div class="login-info-value-container">
+                <span class="login-info-value" title="${field.value}">${field.value}</span>
+                <button class="login-info-copy" data-value="${field.value}" title="Copy to clipboard">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          `).join('');
+          
+          // Add timestamp to each credential entry
+          const date = new Date(cred.timestamp).toLocaleString();
+          
+          return `
+            <div class="login-info-entry">
+              <div class="login-info-timestamp">${date}</div>
+              <div class="login-info-credentials">
+                ${fieldsHTML}
+              </div>
+            </div>
+          `;
+        }).join('');
+        
+        return `
+          <div class="login-info-item">
+            <div class="login-info-domain">${domain}</div>
+            ${credentialsHTML}
+          </div>
+        `;
+      }).join('');
+      
+      savedLoginInfoElement.innerHTML = allCredentialsHTML;
+
+      // Add view all button if not in fullscreen mode
+      if (!loginInfoViewActive) {
+        const viewAllButton = document.createElement('button');
+        viewAllButton.className = 'view-all-button';
+        viewAllButton.textContent = 'View All Login Information';
+        viewAllButton.addEventListener('click', () => {
+          loginInfoViewActive = true;
+          loginInfoSection.classList.add('fullscreen');
+          
+          // Add back button
+          const backButton = document.createElement('button');
+          backButton.className = 'back-button';
+          backButton.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            Back to Overview
+          `;
+          backButton.addEventListener('click', () => {
+            loginInfoViewActive = false;
+            loginInfoSection.classList.remove('fullscreen');
+            backButton.remove();
+            updateSavedLoginInfo(); // Refresh the view
+          });
+          
+          loginInfoSection.insertBefore(backButton, loginInfoSection.firstChild);
+          updateSavedLoginInfo(); // Refresh the view in fullscreen mode
+        });
+        savedLoginInfoElement.appendChild(viewAllButton);
+      }
+      
+      // Add event listeners for copy buttons
+      const copyButtons = savedLoginInfoElement.querySelectorAll('.login-info-copy');
+      copyButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          const value = button.getAttribute('data-value');
+          copyToClipboard(value);
+        });
+      });
+
+      
+    } catch (error) {
+      console.error('Error loading saved login information:', error);
+      savedLoginInfoElement.innerHTML = '<div class="login-info-item">Error loading login information</div>';
+    }
+  }
   
     async function initializeEmail() {
       try {
@@ -457,6 +768,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           checkMessages();
           // Update email history
           updateEmailHistory();
+          // Update saved login information
+          updateSavedLoginInfo();
           // Set up periodic message checking
           setInterval(checkMessages, 10000); // Check every 10 seconds
           return;
@@ -510,6 +823,50 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Handle back button click
   backButton.addEventListener('click', hideMessageDetail);
+  
+  // Listen for credential updates from content script
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.status && !message.isError) {
+      // Update saved login information when form is filled successfully
+      updateSavedLoginInfo();
+    }
+    return true;
+  });
+  
+  // Function to migrate old credentials format to new credentialsHistory format
+  async function migrateCredentials() {
+    try {
+      const { credentials, credentialsHistory = [] } = await chrome.storage.local.get(['credentials', 'credentialsHistory']);
+      
+      // If we have old credentials but no history yet, migrate them
+      if (credentials && credentialsHistory.length === 0) {
+        // Add timestamp to old credentials
+        credentials.timestamp = Date.now();
+        
+        // Create new history with old credentials
+        await chrome.storage.local.set({ 
+          credentialsHistory: [credentials] 
+        });
+        
+        console.log('Migrated old credentials to new format');
+      }
+    } catch (error) {
+      console.error('Error migrating credentials:', error);
+    }
+  }
+  
+  // Call migration function on popup load
+  migrateCredentials();
+
+  // Add click handler for copy email button
+  document.getElementById('copyEmailButton').addEventListener('click', () => {
+    const emailText = tempEmailElement.textContent;
+    if (emailText && emailText !== 'Generating...') {
+      copyToClipboard(emailText).then(() => {
+        updateStatus('Email address copied to clipboard');
+      });
+    }
+  });
 
   // Handle start signup button click
   startSignupButton.addEventListener('click', async () => {

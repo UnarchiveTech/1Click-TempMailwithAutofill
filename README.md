@@ -1,6 +1,6 @@
-# OneClickAutofill with TempMail
+# 1Click Autofill with Temp Mail
 
-A powerful Chrome extension that streamlines the signup process by automatically generating temporary email addresses and managing OTP codes.
+A powerful Chrome extension that streamlines the signup process by automatically generating temporary email addresses and managing OTP codes. This extension integrates with the burner.kiwi API to create disposable email addresses on demand.
 
 ## Features
 
@@ -33,13 +33,13 @@ A powerful Chrome extension that streamlines the signup process by automatically
 ## Features in Detail
 
 ### Temporary Email Management
-- Automatic email generation
+- Automatic email generation using burner.kiwi API
 - Email refresh capability
 - History of previously used emails
 
 ### Message Center
-- Real-time message monitoring
-- OTP code extraction and display
+- Real-time message monitoring via burner.kiwi API
+- Intelligent OTP code extraction from email subjects and bodies
 - Message list with detailed view
 
 ### User Interface
@@ -60,11 +60,25 @@ A powerful Chrome extension that streamlines the signup process by automatically
 └── icons/              # Extension icons
 ```
 
+## API Integration
+
+### burner.kiwi API
+- The extension integrates with burner.kiwi API v2 for temporary email functionality
+- Creates disposable email inboxes via `https://burner.kiwi/api/v2/inbox`
+- Retrieves messages using `https://burner.kiwi/api/v2/inbox/{id}/messages`
+- Uses authentication tokens for secure API access
+
+### OTP Extraction
+- Sophisticated pattern matching to identify OTP codes in emails
+- Supports various OTP formats (4-8 digits, with/without separators)
+- Contextual analysis to identify codes in different message formats
+
 ## Security
 
 - The extension operates with temporary email addresses, ensuring your primary email remains private
 - No sensitive data is stored permanently
-- All communication is handled securely
+- All communication with burner.kiwi API is secured via HTTPS
+- Email tokens are stored locally in browser storage
 
 ## Contributing
 

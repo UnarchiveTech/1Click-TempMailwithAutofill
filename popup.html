@@ -1,284 +1,151 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>OneClickAutofill with TempMail</title>
-  <style>
-    body {
-      width: 300px;
-      padding: 15px;
-      font-family: Arial, sans-serif;
-    }
-    .container {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .temp-email {
-      padding: 10px;
-      background-color: #f5f5f5;
-      border-radius: 4px;
-      word-break: break-all;
-    }
-    button {
-      padding: 8px 16px;
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #45a049;
-    }
-    .icon-button {
-      padding: 4px;
-      background: none;
-      border: none;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      color: #4CAF50;
-    }
-    .icon-button:hover {
-      background-color: rgba(76, 175, 80, 0.1);
-      border-radius: 50%;
-    }
-    .icon-button svg {
-      width: 16px;
-      height: 16px;
-    }
-    .status {
-      margin-top: 10px;
-      padding: 8px;
-      border-radius: 4px;
-    }
-    .success {
-      background-color: #dff0d8;
-      color: #3c763d;
-    }
-    .error {
-      background-color: #f2dede;
-      color: #a94442;
-    }
-    .messages-container {
-      margin-top: 10px;
-      max-height: 200px;
-      overflow-y: auto;
-    }
-    .message-item {
-      padding: 8px;
-      margin: 5px 0;
-      background-color: #f8f9fa;
-      border-radius: 4px;
-      border-left: 3px solid #4CAF50;
-      cursor: pointer;
-    }
-    .message-item:hover {
-      background-color: #e9ecef;
-    }
-    .message-subject {
-      font-weight: bold;
-      margin-bottom: 5px;
-    }
-    .message-time {
-      font-size: 0.8em;
-      color: #666;
-    }
-    .header-container {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .message-detail {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: white;
-      z-index: 1000;
-      padding: 15px;
-      box-sizing: border-box;
-      overflow-y: auto;
-    }
-    .message-detail.active {
-      display: block;
-    }
-    .back-button {
-      margin-bottom: 10px;
-    }
-    .message-content {
-      margin-top: 10px;
-      padding: 10px;
-      background-color: #f8f9fa;
-      border-radius: 4px;
-    }
-    .history-section {
-      margin-top: 10px;
-      border-top: 1px solid #eee;
-      padding-top: 10px;
-    }
-    .history-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .email-history-list {
-      max-height: 150px;
-      overflow-y: auto;
-    }
-    .email-history-item {
-      padding: 8px;
-      margin: 5px 0;
-      background-color: #f8f9fa;
-      border-radius: 4px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.9em;
-    }
-    .email-history-address {
-      color: #2196F3;
-      word-break: break-all;
-    }
-    .email-history-timestamp {
-      color: #666;
-      font-size: 0.8em;
-    }
-    .latest-otp-container {
-      background: #e3f2fd;
-      padding: 12px;
-      margin: 10px 0;
-      border-radius: 8px;
-      border: 2px solid #2196F3;
-      display: none;
-    }
-    .latest-otp-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-    .latest-otp-title {
-      font-weight: bold;
-      color: #1565C0;
-      margin: 0;
-    }
-    .latest-otp-display {
-      font-size: 24px;
-      font-weight: bold;
-      color: #1565C0;
-      text-align: center;
-      padding: 8px;
-      background: white;
-      border-radius: 4px;
-      letter-spacing: 2px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .copy-button {
-      padding: 4px 8px;
-      background: #2196F3;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-    }
-    .copy-button:hover {
-      background: #1976D2;
-    }
-    .otp-badge {
-      background: #4a90e2;
-      color: white;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 12px;
-      margin-left: 8px;
-      display: inline-flex;
-      align-items: center;
-      cursor: pointer;
-      transition: background-color 0.2s;
-    }
-    .otp-badge:hover {
-      background: #3a7bc8;
-    }
-    .message-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .message-meta {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 5px;
-      font-size: 0.9em;
-    }
-  </style>
+  <title>1Click Autofill with Temp Mail</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
+
+
   <div class="container">
-    <div class="header-container">
-      <h2>OneClickAutofill with TempMail</h2>
-      <button id="themeToggle" class="theme-toggle">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="5"/>
-          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-        </svg>
-      </button>
-    </div>
-    
-    <!-- Latest OTP Section -->
-    <div id="latestOtpContainer" class="latest-otp-container">
-      <div class="latest-otp-header">
-        <h3 class="latest-otp-title">Latest OTP Code</h3>
+    <!-- First Horizontal Section with OTP and Email -->
+    <div class="horizontal-section">
+
+      
+      <!-- Email Card Section -->
+      <div class="email-card" style="flex: 1;">
+        <div class="email-header">
+          <div class="email-title-container">
+            <h3 class="email-title">Temporary Email:</h3>
+            <div class="email-display">
+              <div class="email-address" id="tempEmail">Generating...</div>
+              <button id="copyEmailButton" class="copy-button">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                </svg>
+              </button>
+              <button id="refreshEmail" class="icon-button" title="Refresh Email">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                </svg>
+              </button>
+              <button id="historyButton" class="icon-button" title="View Email History">
+                <img src="icons/history.svg" alt="History" width="20" height="20">
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="latest-otp-display">
-        <span id="latestOtpCode">------</span>
-        <button id="copyOtpButton" class="copy-button">Copy</button>
-      </div>
-    </div>
-    
-    <div id="emailContainer" class="temp-email">
-      <strong>Temporary Email:</strong>
-      <span id="tempEmail">Generating...</span>
-      <button id="refreshEmail" class="icon-button" title="Refresh Email">
-        <img src="icons/refresh.svg" alt="Refresh" width="16" height="16">
-      </button>
     </div>
 
-    <div id="messagesContainer" class="messages-container">
-      <div class="header-container">
-        <h3>Mail(s)</h3>
+    <!-- Messages Section -->
+    <div class="messages-container">
+      <div class="messages-header">
+        <h3 class="messages-title">Inbox</h3>
         <button id="refreshMessages" class="icon-button" title="Refresh Messages">
-          <img src="icons/refresh.svg" alt="Refresh" width="16" height="16">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+          </svg>
         </button>
       </div>
       <div id="messagesList"></div>
     </div>
 
-    <div class="history-section">
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+      <button id="startSignup">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+        Autofill Details
+      </button>
+
+      <!-- Latest OTP Section -->
+      <div id="latestOtpContainer" class="otp-container" style="flex: 1;">
+        <div class="otp-header">
+          <h3 class="otp-title">Latest OTP Code:</h3>
+        </div>
+        <div class="otp-display">
+          <span id="latestOtpCode">458647</span>
+          <button id="copyOtpButton" class="copy-button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <button id="loginInfoButton" class="icon-button" title="View Saved Login Information">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8V7a4 4 0 00-8 0v4"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Hidden Email History Section (Shown in fullscreen mode) -->
+    <div class="history-section" style="display: none;">
       <div class="history-header">
-        <h3>Previously Used Emails</h3>
+        <h3 class="history-title">Previously Used Emails</h3>
       </div>
       <div id="emailHistoryList" class="email-history-list"></div>
     </div>
 
-    <button id="startSignup">Start Auto Signup</button>
-    <div id="status" class="status"></div>
+    <!-- Hidden Login Information Section (Shown in fullscreen mode) -->
+    <div class="login-info-section" style="display: none;">
+      <div class="login-info-header">
+        <h3 class="login-info-title">Saved Login Information</h3>
+      </div>
+      <div id="savedLoginInfo" class="saved-login-info"></div>
+    </div>
+    
+    <!-- Status Message -->
+    <!-- Toast notifications will be injected here by JavaScript -->
   </div>
 
+  <!-- Message Detail Modal -->
   <div id="messageDetail" class="message-detail">
-    <button id="backButton" class="back-button">← Back to Messages</button>
+    <button id="backButton" class="back-button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Back to Messages
+    </button>
     <div id="messageDetailContent"></div>
   </div>
 
+  <!-- About Section -->
+  <div class="about-section">
+    <div class="version-info">Version 1.0</div>
+    <div class="footer-buttons">
+      <button id="exportData" class="icon-button" title="Export Data">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v16"/>
+        </svg>
+      </button>
+      <button id="importData" class="icon-button" title="Import Data">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+        </svg>
+      </button>
+      <button id="themeToggle" class="icon-button" title="Toggle Theme">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+      </button>
+      <button id="reportIssue" class="report-button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 8v4M12 16h.01M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2s10 4.477 10 10z"/>
+        </svg>
+        Report Issue
+      </button>
+    </div>
+  </div>
+
+  <script src="data-manager.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

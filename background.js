@@ -39,41 +39,118 @@ async function createInbox() {
 }
 
 // Function to extract OTP from email content
-function extractOTP(content) {
+function extractOTP(subject, body) {
+  // First check if subject is provided and contains an OTP
+  if (subject) {
+    console.log('Checking subject for OTP:', subject);
+    
+    // Normalize subject
+    const normalizedSubject = subject.replace(/<[^>]+>/g, ' ')
+                                   .replace(/\s+/g, ' ')
+                                   .trim();
+    
+    // Try to extract OTP from subject
+    const subjectOTP = extractOTPFromText(normalizedSubject);
+    if (subjectOTP) {
+      console.log('OTP found in subject:', subjectOTP);
+      return subjectOTP;
+    }
+  }
+  
+  // If no OTP found in subject or subject not provided, check body
+  if (!body) {
+    console.log('No email body provided');
+    return null;
+  }
+  
+  // Log the full email body for debugging
+  console.log('Full email body:', body);
+  console.log('Extracting OTP from body:', body.substring(0, 100) + '...');
+  
+  // Normalize content: convert HTML to text and clean up whitespace
+  const content = body.replace(/<[^>]+>/g, ' ')
+                      .replace(/\s+/g, ' ')
+                      .trim();
+  
+  console.log('Normalized content:', content.substring(0, 100) + '...');
+  
+  return extractOTPFromText(content);
+}
+
+// Helper function to extract OTP from text (subject or body)
+function extractOTPFromText(content) {
   // Enhanced OTP patterns with more comprehensive detection
   const patterns = [
-    // Pattern for explicit OTP mentions
-    /(?:OTP|one[ -]?time[ -]?(?:password|code)|verification[ -]?code|security[ -]?code|auth(?:entication)?[ -]?code)[^0-9]*([0-9]{4,8})/i,
+    // Common OTP indicators with numbers
+    /(?:OTP|one[- ]?time[- ]?(?:password|code|pin)|verification[- ]?code|security[- ]?code|auth(?:entication)?[- ]?code)[^0-9]*?([0-9]{4,8})/i,
     
-    // Pattern for codes in specific formats (4-8 digits)
-    /\b([0-9]{4,8})\b/,
+    // OTP with explicit labeling
+    /your(?:\s+[a-z]+)*\s+(?:code|OTP|pin)\s+(?:is|:)\s*([0-9]{4,8})/i,
     
-    // Pattern for codes with separators
-    /\b([0-9]{3,4}[- ][0-9]{3,4})\b/,
+    // OTP in specific formats with context
+    /(?:use|enter|verify with|code)[^0-9]*?([0-9]{3,4}[- ]?[0-9]{3,4})/i,
     
-    // Pattern for codes in context
-    /code(?:\s+is)?[^0-9]*([0-9]{4,8})/i,
+    // OTP with common prefixes/suffixes
+    /\b(?:code|pin|otp)\s*[:=]\s*([0-9]{4,8})\b/i,
     
-    // Fallback pattern for any numeric sequence that might be an OTP
-    /([0-9]{4,8})(?:[^0-9]|$)/
+    // Numbers in typical OTP formats (4-8 digits)
+    /\b([0-9]{4,8})\b(?=(?:[^0-9]|$).*?(?:valid|expires|verify|authentication|code|otp))/i,
+    
+    // Numbers with separators in OTP context
+    /\b([0-9]{3}[- ][0-9]{3}|[0-9]{4}[- ][0-9]{4}|[0-9]{4}[- ][0-9]{3})\b/,
+    
+    // Fallback: isolated numbers that look like OTPs
+    /\b([0-9]{4,8})\b(?![0-9])/
   ];
 
   // Try each pattern in order of specificity
   for (const pattern of patterns) {
-    const match = content.match(pattern);
-    if (match && match[1]) {
-      // Clean up the OTP (remove any spaces or dashes)
-      return match[1].replace(/[- ]/g, '');
+    console.log('Trying pattern:', pattern);
+    const matches = content.match(pattern);
+    if (matches) {
+      console.log('Pattern matched:', matches);
+      if (matches[1]) {
+        // Clean up the OTP (remove spaces, dashes)
+        const otp = matches[1].replace(/[- ]/g, '');
+        console.log('Extracted potential OTP:', otp);
+        
+        // Validate the cleaned OTP
+        if (/^[0-9]{4,8}$/.test(otp)) {
+          console.log('Valid OTP found:', otp);
+          return otp;
+        } else {
+          console.log('Invalid OTP format, continuing search...');
+        }
+      }
+    }
+  }
+
+  // If no valid OTP found with primary patterns
+  // Look for any isolated number that could be an OTP
+  console.log('No OTP found with primary patterns, trying fallback detection...');
+  const numbers = content.match(/\b\d{4,8}\b/g) || [];
+  console.log('Found potential OTP numbers:', numbers);
+  
+  for (const num of numbers) {
+    // Check if the number appears in a context that suggests it's an OTP
+    const context = content.substring(
+      Math.max(0, content.indexOf(num) - 50),
+      Math.min(content.length, content.indexOf(num) + 50)
+    ).toLowerCase();
+    
+    console.log(`Checking context for number ${num}:`, context.substring(0, 30) + '...');
+    
+    if (context.includes('otp') || 
+        context.includes('code') || 
+        context.includes('pin') || 
+        context.includes('verify') || 
+        context.includes('authentication')) {
+      console.log('OTP found in context:', num);
+      return num;
     }
   }
   
-  // If no match found with the primary patterns, try a more aggressive approach
-  // Look for any 4-8 digit number that appears isolated
-  const aggressiveMatch = content.match(/\b(\d{4,8})\b/);
-  if (aggressiveMatch && aggressiveMatch[1]) {
-    return aggressiveMatch[1];
-  }
-  
+  console.log('No OTP found in email content');
   return null;
 }
 
@@ -102,10 +179,20 @@ async function checkNewEmails() {
 
     // Process messages to extract OTP
     const messages = data.result || [];
-    return messages.map(msg => ({
-      ...msg,
-      otp: extractOTP(msg.text || '')
-    }));
+    console.log(`Processing ${messages.length} messages for OTP extraction`);
+    
+    return messages.map(msg => {
+      console.log('Processing message:', msg.subject || 'No Subject');
+      // Log the full message text for debugging
+      console.log('Full message text:', msg.body_plain || 'No content');
+      // Pass both subject and body to extractOTP function
+      const otp = extractOTP(msg.subject || '', msg.body_plain || '');
+      console.log('Extracted OTP result:', otp);
+      return {
+        ...msg,
+        otp
+      };
+    });
   } catch (error) {
     console.error('Error checking emails:', error);
     throw error;

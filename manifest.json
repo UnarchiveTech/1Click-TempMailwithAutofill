@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "OneClickAutofill with TempMail",
+  "name": "1Click Autofill with Temp Mail",
   "version": "1.0",
   "description": "Automatically fill signup forms with temporary email and manage OTP codes",
   "permissions": [
