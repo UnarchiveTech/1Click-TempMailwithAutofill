@@ -232,15 +232,6 @@ button:active {
   border-radius: 4px;
   transition: all 0.2s ease;
 }
-  font-weight: 500;
-  color: var(--primary-color);
-  display: inline-flex;
-  align-items: center;
-  background-color: var(--bg-tertiary);
-  padding: 6px 10px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
 
 .email-address:hover {
   background-color: var(--bg-secondary);
@@ -680,7 +671,6 @@ button:active {
 .view-all-button:hover {
   background-color: var(--primary-color);
   color: white;
-}
 }
 
 .login-info-item {
