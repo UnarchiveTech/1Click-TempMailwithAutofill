@@ -49,16 +49,22 @@ A powerful Chrome extension that streamlines the signup process by automatically
 
 ## File Structure
 
-```
-├── manifest.json        # Extension configuration
-├── popup.html          # Main popup interface
-├── popup.js            # Popup functionality
-├── content.js          # Content script for form filling
-├── background.js       # Background service worker
-├── history.html        # Email history page
-├── history.js          # History functionality
-└── icons/              # Extension icons
-```
+Here's a detailed breakdown of each file's purpose in the extension:
+
+- **background.js**: Handles background processes and communication between different parts of the extension
+- **content.js**: Injected into web pages to handle form auto-filling functionality
+- **data-manager.js**: Manages storage and retrieval of temporary emails and OTP codes
+- **history.html**: The HTML template for the email history view
+- **history.js**: Handles the logic for displaying and managing email history
+- **icons/**: Contains all icon assets used by the extension
+  - **autofill.svg**: Icon for auto-fill functionality
+  - **history.svg**: Icon for history view
+  - **icon*.png**: Various sized icons for the extension
+  - **refresh.svg**: Refresh icon
+- **manifest.json**: Extension configuration file defining permissions and structure
+- **popup.html**: The main popup interface HTML
+- **popup.js**: Handles the popup UI logic and user interactions
+- **styles.css**: Contains all CSS styling for the extension
 
 ## API Integration
 
