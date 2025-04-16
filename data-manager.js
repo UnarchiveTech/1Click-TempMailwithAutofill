@@ -1,9 +1,6 @@
-// Data Manager Module for OneClickAutofill
-
-// Function to export all extension data
 async function exportData() {
   try {
-    const { emailHistory = [], credentialsHistory = [], darkMode = false } = await chrome.storage.local.get(['emailHistory', 'credentialsHistory', 'darkMode']);
+    const { emailHistory = [], credentialsHistory = [], darkMode = false, inboxes = [], activeInboxId } = await chrome.storage.local.get(['emailHistory', 'credentialsHistory', 'darkMode', 'inboxes', 'activeInboxId']);
     
     const exportData = {
       version: '1.0',
@@ -12,8 +9,10 @@ async function exportData() {
         emailHistory,
         credentialsHistory,
         settings: {
-          darkMode
-        }
+          darkMode,
+          activeInboxId
+        },
+        inboxes
       }
     };
 
@@ -35,29 +34,24 @@ async function exportData() {
   }
 }
 
-// Function to import extension data
 async function importData(file) {
   try {
     const fileContent = await file.text();
     const importedData = JSON.parse(fileContent);
     
-    // Validate data structure
     if (!importedData.version || !importedData.data) {
       throw new Error('Invalid backup file format');
     }
     
-    const { emailHistory = [], credentialsHistory = [], settings = {} } = importedData.data;
+    const { emailHistory = [], credentialsHistory = [], settings = {}, inboxes = [] } = importedData.data;
     
-    // Validate data types
-    if (!Array.isArray(emailHistory) || !Array.isArray(credentialsHistory)) {
+    if (!Array.isArray(emailHistory) || !Array.isArray(credentialsHistory) || !Array.isArray(inboxes)) {
       throw new Error('Invalid data format in backup file');
     }
     
-    // Merge with existing data
-    const { emailHistory: existingEmails = [], credentialsHistory: existingCreds = [] } = 
-      await chrome.storage.local.get(['emailHistory', 'credentialsHistory']);
+    const { emailHistory: existingEmails = [], credentialsHistory: existingCreds = [], inboxes: existingInboxes = [] } = 
+      await chrome.storage.local.get(['emailHistory', 'credentialsHistory', 'inboxes']);
     
-    // Merge email history, avoiding duplicates
     const mergedEmails = [...existingEmails];
     emailHistory.forEach(newEmail => {
       if (!mergedEmails.some(existing => existing.email === newEmail.email)) {
@@ -65,7 +59,6 @@ async function importData(file) {
       }
     });
     
-    // Merge credentials history, avoiding duplicates
     const mergedCreds = [...existingCreds];
     credentialsHistory.forEach(newCred => {
       if (!mergedCreds.some(existing => 
@@ -75,11 +68,19 @@ async function importData(file) {
       }
     });
     
-    // Save merged data
+    const mergedInboxes = [...existingInboxes];
+    inboxes.forEach(newInbox => {
+      if (!mergedInboxes.some(existing => existing.id === newInbox.id)) {
+        mergedInboxes.push(newInbox);
+      }
+    });
+    
     await chrome.storage.local.set({
       emailHistory: mergedEmails,
       credentialsHistory: mergedCreds,
-      darkMode: settings.darkMode
+      inboxes: mergedInboxes,
+      darkMode: settings.darkMode,
+      activeInboxId: settings.activeInboxId
     });
     
     return { success: true };
@@ -89,7 +90,6 @@ async function importData(file) {
   }
 }
 
-// Export functions
 window.dataManager = {
   exportData,
   importData

@@ -12,7 +12,6 @@
 
 .autofill-button {
   background-color: var(--primary-color);
-  color: white;
   border: none;
   border-radius: 4px;
   padding: 8px 12px;
@@ -46,6 +45,7 @@
   transition: opacity 0.3s;
   font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
 }
+
 :root {
   /* Light Theme Variables */
   --primary-color: #4285F4;
@@ -111,11 +111,94 @@ body {
 .horizontal-section {
   display: flex;
   flex-direction: row;
-  gap: 16px;
+  gap: 8px;
   width: 100%;
   padding: 0px;
   box-sizing: border-box;
   justify-content: space-between;
+}
+
+/* Inbox Dropdown Styles */
+.inbox-dropdown-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.inbox-dropdown {
+  flex: 1;
+  position: relative;
+  font-size: 14px;
+  font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.inbox-dropdown:focus-within {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+}
+
+.dropdown-selected {
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dropdown-selected::after {
+  content: '▼';
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.dropdown-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+  z-index: 1000;
+  margin: 4px 0;
+  box-shadow: 0 2px 4px var(--shadow-color);
+}
+
+.dropdown-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background-color 0.2s;
+  word-break: break-all;
+}
+
+.dropdown-list li:hover {
+  background-color: var(--bg-secondary);
+}
+
+.dropdown-list .delete-button {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--error-color);
+  display: flex;
+  align-items: center;
+}
+
+.dropdown-list .delete-button:hover {
+  background-color: rgba(234, 67, 53, 0.1);
 }
 
 /* Header Styles */
@@ -194,9 +277,14 @@ button:active {
   background-color: rgba(66, 133, 244, 0.1);
 }
 
-.icon-button img, .icon-button svg {
+.icon-button svg {
   width: 18px;
   height: 18px;
+  stroke: var(--primary-color);
+}
+
+body.dark-mode .icon-button svg {
+  stroke: var(--dark-primary-color);
 }
 
 /* Email Container Styles */
@@ -325,12 +413,12 @@ button:active {
 .copy-button {
   background-color: transparent;
   color: var(--primary-color);
-  padding: 6px 6px;
+  padding: 6px;
   min-height: unset;
   border-radius: 6px;
   transition: all 0.2s ease;
   font-weight: 500;
-  font-size: 15px;
+  font-size: 13px;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -347,6 +435,16 @@ button:active {
 .copy-button:active {
   transform: translateY(0);
   box-shadow: none;
+}
+
+.copy-button svg {
+  width: 16px;
+  height: 16px;
+  stroke: var(--primary-color);
+}
+
+.copy-button:hover svg {
+  stroke: white;
 }
 
 /* Messages Container Styles */
@@ -958,10 +1056,8 @@ body.dark-mode .icon-button {
   color: var(--dark-primary-color);
 }
 
-body.dark-mode .icon-button svg,
-body.dark-mode .icon-button img {
-  stroke: var(--dark-text-primary);
-  fill: none;
+body.dark-mode .icon-button svg {
+  stroke: var(--dark-primary-color);
 }
 
 body.dark-mode .icon-button:hover {
@@ -988,10 +1084,6 @@ body.dark-mode .about-section {
 
 body.dark-mode .version-info {
   color: var(--dark-text-secondary);
-}
-
-body.dark-mode .version-info::before {
-  color: var(--dark-primary-color);
 }
 
 body.dark-mode .version-info::before {
@@ -1086,4 +1178,51 @@ body.dark-mode ::-webkit-scrollbar-thumb {
 
 body.dark-mode ::-webkit-scrollbar-thumb:hover {
   background: var(--dark-text-primary);
+}
+
+body.dark-mode .inbox-dropdown {
+  background-color: var(--dark-bg-secondary);
+  color: var(--dark-text-primary);
+  border-color: var(--dark-border-color);
+}
+
+body.dark-mode .inbox-dropdown:focus-within {
+  border-color: var(--dark-primary-color);
+  box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.2);
+}
+
+body.dark-mode .dropdown-list {
+  background-color: var(--dark-bg-primary);
+  color: var(--dark-text-primary);
+  border-color: var(--dark-border-color);
+}
+
+body.dark-mode .dropdown-list li:hover {
+  background-color: var(--dark-bg-secondary);
+}
+
+body.dark-mode .dropdown-list .delete-button {
+  color: var(--dark-error-color);
+}
+
+body.dark-mode .dropdown-list .delete-button:hover {
+  background-color: rgba(242, 139, 130, 0.1);
+}
+
+body.dark-mode .copy-button {
+  color: var(--dark-primary-color);
+  border-color: var(--dark-primary-color);
+}
+
+body.dark-mode .copy-button svg {
+  stroke: var(--dark-primary-color);
+}
+
+body.dark-mode .copy-button:hover {
+  background-color: var(--dark-primary-color);
+  color: var(--dark-bg-primary);
+}
+
+body.dark-mode .copy-button:hover svg {
+  stroke: var(--dark-bg-primary);
 }

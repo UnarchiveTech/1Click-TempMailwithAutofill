@@ -6,37 +6,25 @@
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-
-
   <div class="container">
-    <!-- First Horizontal Section with OTP and Email -->
-    <div class="horizontal-section">
-
-      
-      <!-- Email Card Section -->
-      <div class="email-card" style="flex: 1;">
-        <div class="email-header">
-          <div class="email-title-container">
-            <h3 class="email-title">Temporary Email:</h3>
-            <div class="email-display">
-              <div class="email-address" id="tempEmail">Generating...</div>
-              <button id="copyEmailButton" class="copy-button">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                </svg>
-              </button>
-              <button id="refreshEmail" class="icon-button" title="Refresh Email">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                </svg>
-              </button>
-              <button id="historyButton" class="icon-button" title="View Email History">
-                <img src="icons/history.svg" alt="History" width="20" height="20">
-              </button>
-            </div>
-          </div>
+    <!-- Inbox Container -->
+    <div id="inboxContainer" class="horizontal-section">
+      <div class="inbox-dropdown-container">
+        <div id="inboxDropdown" class="inbox-dropdown">
+          <div class="dropdown-selected">Select an inbox</div>
+          <ul class="dropdown-list" style="display: none;"></ul>
         </div>
+        <button id="copyEmailButton" class="icon-button copy-button" title="Copy Email" style="display: none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+          </svg>
+        </button>
+        <button id="addInboxButton" class="icon-button" title="Add New Inbox">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -68,82 +56,96 @@
           <h3 class="otp-title">Latest OTP Code:</h3>
         </div>
         <div class="otp-display">
-          <span id="latestOtpCode">458647</span>
-          <button id="copyOtpButton" class="copy-button">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <span id="latestOtpCode">------</span>
+          <button id="copyOtpButton" class="copy-button" title="Copy OTP">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
               <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
             </svg>
           </button>
         </div>
       </div>
-
-      <button id="loginInfoButton" class="icon-button" title="View Saved Login Information">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8V7a4 4 0 00-8 0v4"/>
-        </svg>
-      </button>
     </div>
 
-    <!-- Hidden Email History Section (Shown in fullscreen mode) -->
-    <div class="history-section" style="display: none;">
+    <!-- History Section -->
+    <div class="history-section">
       <div class="history-header">
-        <h3 class="history-title">Previously Used Emails</h3>
+        <h3 class="history-title">Email History</h3>
+        <button id="historyButton" class="icon-button" title="View Email History">
+          <img src="icons/history.svg" alt="History" width="20" height="20">
+        </button>
       </div>
-      <div id="emailHistoryList" class="email-history-list"></div>
+      <div id="emailHistoryList"></div>
     </div>
 
-    <!-- Hidden Login Information Section (Shown in fullscreen mode) -->
-    <div class="login-info-section" style="display: none;">
+    <!-- Login Info Section -->
+    <div class="login-info-section">
       <div class="login-info-header">
         <h3 class="login-info-title">Saved Login Information</h3>
+        <button id="loginInfoButton" class="icon-button" title="View Login Information">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"></path>
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+          </svg>
+        </button>
       </div>
-      <div id="savedLoginInfo" class="saved-login-info"></div>
+      <div id="savedLoginInfo"></div>
     </div>
-    
-    <!-- Status Message -->
-    <!-- Toast notifications will be injected here by JavaScript -->
+
+    <!-- About Section -->
+    <div class="about-section">
+      <div class="version">Version 1.0</div>
+      <div class="about-buttons">
+        <button id="exportData" class="icon-button" title="Export Data">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 13v6a2 2 0 01-2 2H7a2 2 0 01-2-2v-6"></path>
+            <path d="M12 3v12"></path>
+            <path d="M9 12l3 3 3-3"></path>
+          </svg>
+        </button>
+        <button id="importData" class="icon-button" title="Import Data">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 13v6a2 2 0 01-2 2H7a2 2 0 01-2-2v-6"></path>
+            <path d="M12 15V3"></path>
+            <path d="M15 6l-3-3-3 3"></path>
+          </svg>
+        </button>
+        <button id="themeToggle" class="icon-button" title="Toggle Theme">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"></path>
+          </svg>
+        </button>
+        <button id="reportIssue" class="icon-button" title="Report an Issue">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
+            <path d="M12 16v.01M12 12V8"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Message Detail Modal -->
+    <div id="messageDetail" class="message-detail">
+      <button id="backButton" class="back-button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+        Back
+      </button>
+      <div id="messageDetailContent"></div>
+    </div>
   </div>
 
-  <!-- Message Detail Modal -->
-  <div id="messageDetail" class="message-detail">
-    <button id="backButton" class="back-button">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M19 12H5M12 19l-7-7 7-7"/>
-      </svg>
-      Back to Messages
-    </button>
-    <div id="messageDetailContent"></div>
-  </div>
-
-  <!-- About Section -->
-  <div class="about-section">
-    <div class="version-info">Version 1.0</div>
-    <div class="footer-buttons">
-      <button id="exportData" class="icon-button" title="Export Data">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v16"/>
-        </svg>
-      </button>
-      <button id="importData" class="icon-button" title="Import Data">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-        </svg>
-      </button>
-      <button id="themeToggle" class="icon-button" title="Toggle Theme">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="5"/>
-          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-        </svg>
-      </button>
-      <button id="reportIssue" class="report-button">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 8v4M12 16h.01M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2s10 4.477 10 10z"/>
-        </svg>
-        Report Issue
-      </button>
-    </div>
-  </div>
+  <!-- Cloudflare script -->
+  <script nonce="z1z2z3z4z5">
+    (function() {
+      var a = document.createElement("script");
+      a.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+      a.async = true;
+      a.defer = true;
+      document.head.appendChild(a);
+    })();
+  </script>
 
   <script src="data-manager.js"></script>
   <script src="popup.js"></script>

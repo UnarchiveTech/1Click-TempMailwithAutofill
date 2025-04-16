@@ -1,10 +1,13 @@
 document.addEventListener('DOMContentLoaded', async () => {
-  // DOM Elements
-  const tempEmailElement = document.getElementById('tempEmail');
+  const inboxContainer = document.getElementById('inboxContainer');
+  const inboxDropdown = document.getElementById('inboxDropdown');
+  const dropdownSelected = inboxDropdown.querySelector('.dropdown-selected');
+  const dropdownList = inboxDropdown.querySelector('.dropdown-list');
+  const addInboxButton = document.getElementById('addInboxButton');
+  const copyEmailButton = document.getElementById('copyEmailButton');
   const startSignupButton = document.getElementById('startSignup');
-  const refreshEmailButton = document.getElementById('refreshEmail');
-  const themeToggleButton = document.getElementById('themeToggle');
   const refreshMessagesButton = document.getElementById('refreshMessages');
+  const themeToggleButton = document.getElementById('themeToggle');
   const statusElement = document.getElementById('status');
   const messagesListElement = document.getElementById('messagesList');
   const messageDetailElement = document.getElementById('messageDetail');
@@ -21,34 +24,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   const importDataButton = document.getElementById('importData');
   let loginInfoViewActive = false;
 
-  // Create hidden file input for import
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.accept = '.json';
   fileInput.style.display = 'none';
   document.body.appendChild(fileInput);
 
-  // Add click handler for history button - toggle history view in popup
   const historySection = document.querySelector('.history-section');
   const emailHistoryList = document.getElementById('emailHistoryList');
-  const mainContent = document.querySelector('.container');
   let historyViewActive = false;
-  
-  // Add click handler for login info button - toggle login info view in popup
-  const loginInfoButton = document.getElementById('loginInfoButton');
-  
+
   loginInfoButton.addEventListener('click', () => {
     loginInfoViewActive = !loginInfoViewActive;
     
     if (loginInfoViewActive) {
-      // Update login info before showing
       updateSavedLoginInfo();
-      
-      // Show login info section in full popup
       loginInfoSection.style.display = 'block';
       loginInfoSection.classList.add('fullscreen');
       
-      // Add back button if it doesn't exist
       if (!document.getElementById('loginInfoBackButton')) {
         const backButton = document.createElement('button');
         backButton.id = 'loginInfoBackButton';
@@ -71,19 +64,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
   });
-  
+
   historyButton.addEventListener('click', () => {
     historyViewActive = !historyViewActive;
     
     if (historyViewActive) {
-      // Update email history before showing
       updateEmailHistory();
-      
-      // Show history section in full popup using CSS class
       historySection.style.display = 'block';
       historySection.classList.add('fullscreen');
       
-      // Add back button if it doesn't exist
       if (!document.getElementById('historyBackButton')) {
         const backButton = document.createElement('button');
         backButton.id = 'historyBackButton';
@@ -106,30 +95,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
   });
-  
-  // Add click handler for report issue button
+
   reportIssueButton.addEventListener('click', () => {
     chrome.tabs.create({
       url: 'https://github.com/TejasMate/1Click-Autofill-with-Temp-Mail/issues/new'
     });
   });
 
-  // Add click handler for export data button
   exportDataButton.addEventListener('click', async () => {
     const result = await window.dataManager.exportData();
     if (result.success) {
-      updateStatus('Data exported successfully');
+      showToast('Data exported successfully');
     } else {
-      updateStatus('Failed to export data: ' + result.error, true);
+      showToast('Failed to export data: ' + result.error, true);
     }
   });
 
-  // Add click handler for import data button
   importDataButton.addEventListener('click', () => {
     fileInput.click();
   });
 
-  // Add change handler for file input
   fileInput.addEventListener('change', async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -137,22 +122,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const result = await window.dataManager.importData(file);
       if (result.success) {
-        updateStatus('Data imported successfully');
-        // Refresh displayed data
+        showToast('Data imported successfully');
         updateEmailHistory();
         updateSavedLoginInfo();
+        await initializeInboxes();
       } else {
-        updateStatus('Failed to import data: ' + result.error, true);
+        showToast('Failed to import data: ' + result.error, true);
       }
     } catch (error) {
-      updateStatus('Error importing data: ' + error.message, true);
+      showToast('Error importing data: ' + error.message, true);
     } finally {
-      // Reset file input
       fileInput.value = '';
     }
   });
 
-  // Theme toggle functionality
   const initializeTheme = async () => {
     try {
       const { darkMode } = await chrome.storage.local.get(['darkMode']);
@@ -167,10 +150,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   };
 
-  // Initialize theme
   let isDarkMode = await initializeTheme();
 
-  // Theme toggle handler
   themeToggleButton.addEventListener('click', async () => {
     isDarkMode = !isDarkMode;
     
@@ -180,7 +161,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.body.classList.remove('dark-mode');
     }
     
-    // Save theme preference
     try {
       await chrome.storage.local.set({ darkMode: isDarkMode });
     } catch (error) {
@@ -188,9 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Function to update status
   function showToast(message, isError = false) {
-    // Create toast container if it doesn't exist
     let toastContainer = document.querySelector('.toast-container');
     if (!toastContainer) {
       toastContainer = document.createElement('div');
@@ -198,41 +176,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.body.appendChild(toastContainer);
     }
 
-    // Create new toast
     const toast = document.createElement('div');
     toast.className = `toast ${isError ? 'error' : 'success'}`;
     toast.textContent = message;
 
-    // Add toast to container
     toastContainer.appendChild(toast);
 
-    // Trigger animation
     setTimeout(() => toast.classList.add('show'), 10);
 
-    // Remove toast after 3 seconds
     setTimeout(() => {
       toast.classList.remove('show');
       setTimeout(() => toast.remove(), 300);
     }, 3000);
   }
 
-  // Replace all updateStatus calls with showToast
   function updateStatus(message, isError = false) {
     showToast(message, isError);
   }
 
-  // Function to copy text to clipboard
   async function copyToClipboard(text) {
     try {
       await navigator.clipboard.writeText(text);
-      updateStatus('OTP copied to clipboard');
+      updateStatus('Copied to clipboard');
     } catch (err) {
       console.error('Failed to copy: ', err);
-      updateStatus('Failed to copy OTP', true);
+      updateStatus('Failed to copy', true);
     }
   }
 
-  // Add click handler for copy OTP button
   copyOtpButton.addEventListener('click', () => {
     const otpText = latestOtpCode.textContent;
     if (otpText && otpText !== '------') {
@@ -240,35 +211,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Function to update latest OTP display
+  copyEmailButton.addEventListener('click', () => {
+    const emailText = dropdownSelected.textContent;
+    if (emailText && emailText !== 'Select an inbox') {
+      copyToClipboard(emailText);
+    }
+  });
+
   function updateLatestOtp(otp) {
     if (otp) {
       latestOtpContainer.style.display = 'block';
       latestOtpCode.textContent = otp;
-      // CSS classes handle the styling based on theme
     } else {
       latestOtpContainer.style.display = 'none';
       latestOtpCode.textContent = '------';
     }
   }
 
-  // Function to show message detail
   function showMessageDetail(message) {
     const width = 800;
     const height = 600;
     const left = (screen.width - width) / 2;
     const top = (screen.height - height) / 2;
-    // Generate a more secure nonce with sufficient entropy
     const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
-  
+
     const messageWindow = window.open('', '_blank', `popup=yes,width=${width},height=${height},left=${left},top=${top},titlebar=no,frame=no,toolbar=no,menubar=no,location=no,status=no,resizable=no,chrome=no,dialog=yes`);
     if (!messageWindow) {
       updateStatus('Popup blocked. Please allow popups for this site.', true);
       return;
     }
-  
+
     const otpSection = message.otp ? `
       <div class="otp-section">
         <h2>OTP Code Detected</h2>
@@ -276,7 +250,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <button class="copy-otp-button" data-otp="${message.otp}">Copy OTP</button>
       </div>
     ` : '';
-  
+
     messageWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -456,52 +430,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     messageWindow.document.close();
   }
 
-  // Function to hide message detail
   function hideMessageDetail() {
     messageDetailElement.classList.remove('active');
     messageDetailContentElement.innerHTML = '';
   }
 
-  // Function to find latest OTP from messages
   function findLatestOtp(messages) {
     if (!messages || messages.length === 0) return null;
     
-    // Sort messages by received time, newest first
     const sortedMessages = [...messages].sort((a, b) => b.received_at - a.received_at);
     
-    // Find the first message with an OTP
     const messageWithOtp = sortedMessages.find(message => {
-      // Check if message has an OTP property and it's not empty
       return message.otp && message.otp.trim().length > 0;
     });
     
-    // Return the OTP if found, otherwise null
     return messageWithOtp ? messageWithOtp.otp : null;
   }
 
-  // Function to display messages
   function displayMessages(messages) {
     messagesListElement.innerHTML = '';
     if (messages.length === 0) {
       messagesListElement.innerHTML = '<div class="message-item">No mail yet</div>';
-      updateLatestOtp(null); // Hide OTP container if no messages
+      updateLatestOtp(null);
       return;
     }
-  
-    // Find and display latest OTP
+
     const latestOtp = findLatestOtp(messages);
     if (latestOtp) {
-      updateLatestOtp(latestOtp); // This will show the OTP container if an OTP is found
+      updateLatestOtp(latestOtp);
     }
-  
-    // Sort messages by received time, newest first
+
     const sortedMessages = [...messages].sort((a, b) => b.received_at - a.received_at);
-  
+
     sortedMessages.forEach(message => {
       const messageElement = document.createElement('div');
       messageElement.className = 'message-item';
       
-      // Create a more prominent OTP badge if OTP exists
       const otpBadge = message.otp ? `
         <span class="otp-badge" title="Click to copy OTP" data-otp="${message.otp}">
           OTP: ${message.otp}
@@ -519,14 +483,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
       `;
       
-      // Add click handler for the message
       messageElement.addEventListener('click', () => showMessageDetail(message));
       
-      // Add click handler for OTP badge to copy OTP
       const badge = messageElement.querySelector('.otp-badge');
       if (badge) {
         badge.addEventListener('click', (e) => {
-          e.stopPropagation(); // Prevent triggering the message click
+          e.stopPropagation();
           const otp = badge.getAttribute('data-otp');
           copyToClipboard(otp);
         });
@@ -536,10 +498,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Function to check for new messages
-  async function checkMessages() {
+  async function checkMessages(inboxId) {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'checkEmails' });
+      const response = await chrome.runtime.sendMessage({ type: 'checkEmails', inboxId });
       if (response.success) {
         displayMessages(response.messages);
       } else {
@@ -551,13 +512,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Function to add email to history
   async function addEmailToHistory(email) {
     try {
       const { emailHistory = [] } = await chrome.storage.local.get(['emailHistory']);
       const newEntry = { email, timestamp: Date.now() };
       
-      // Add new email to history, avoiding duplicates
       if (!emailHistory.some(entry => entry.email === email)) {
         emailHistory.push(newEntry);
         await chrome.storage.local.set({ emailHistory });
@@ -567,351 +526,304 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Function to update email history in popup
   async function updateEmailHistory() {
-      const emailHistoryList = document.getElementById('emailHistoryList');
-      try {
-        const { emailHistory = [] } = await chrome.storage.local.get(['emailHistory']);
-        
-        if (emailHistory.length === 0) {
-          emailHistoryList.innerHTML = '<div class="email-history-item">No previous email addresses</div>';
-          return;
-        }
-  
-        // Sort emails by timestamp, most recent first
-        emailHistory.sort((a, b) => b.timestamp - a.timestamp);
-        
-        // Check if we're in full history view mode
-        const isFullView = historyViewActive;
-        // Limit number of emails in mini view, show all in full view
-        const emailsToShow = isFullView ? emailHistory : emailHistory.slice(0, 5);
-  
-        // Display emails
-        emailHistoryList.innerHTML = emailsToShow
-          .map(entry => `
-            <div class="email-history-item ${isFullView ? 'full-view' : ''}">
-              <span class="email-history-address">${entry.email}</span>
-              <span class="email-history-timestamp">${new Date(entry.timestamp).toLocaleString()}</span>
-            </div>
-          `)
-          .join('');
-          
-        // Add a "View all" link if in mini view and there are more emails
-        if (!isFullView && emailHistory.length > 5) {
-          const viewAllLink = document.createElement('div');
-          viewAllLink.className = 'view-all-link';
-          viewAllLink.textContent = `View all (${emailHistory.length})`;
-          viewAllLink.addEventListener('click', () => {
-            historyButton.click(); // Trigger the history button click
-          });
-          emailHistoryList.appendChild(viewAllLink);
-        }
-  
-      } catch (error) {
-        console.error('Error loading email history:', error);
-        emailHistoryList.innerHTML = '<div class="email-history-item">Error loading email history</div>';
-      }
-    }
-    
-  // Function to update saved login information
-  async function updateSavedLoginInfo() {
-    const savedLoginInfoElement = document.getElementById('savedLoginInfo');
-    const loginInfoSection = document.querySelector('.login-info-section');
     try {
-      // Get credentials history instead of single credential
-      const { credentialsHistory = [] } = await chrome.storage.local.get(['credentialsHistory']);
+      const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
       
-      if (credentialsHistory.length === 0) {
-        savedLoginInfoElement.innerHTML = '<div class="login-info-item">No saved login information</div>';
+      if (inboxes.length === 0) {
+        emailHistoryList.innerHTML = '<div class="email-history-item">No previous email addresses</div>';
         return;
       }
-      
-      // Group credentials by domain
-      const credentialsByDomain = {};
-      credentialsHistory.forEach(cred => {
-        const domain = cred.domain || 'Unknown Website';
-        if (!credentialsByDomain[domain]) {
-          credentialsByDomain[domain] = [];
-        }
-        credentialsByDomain[domain].push(cred);
-      });
-      
-      // Generate HTML for all credentials grouped by domain
-      const allCredentialsHTML = Object.entries(credentialsByDomain).map(([domain, credentials]) => {
-        // Sort credentials by timestamp (newest first)
-        credentials.sort((a, b) => b.timestamp - a.timestamp);
-        
-        // Generate HTML for each credential entry
-        const credentialsHTML = credentials.map(cred => {
-          const credentialFields = [];
-          
-          if (cred.email) {
-            credentialFields.push({
-              label: 'Email',
-              value: cred.email
-            });
-          }
-          
-          if (cred.username) {
-            credentialFields.push({
-              label: 'Username',
-              value: cred.username
-            });
-          }
-          
-          if (cred.name) {
-            credentialFields.push({
-              label: 'Name',
-              value: cred.name
-            });
-          }
-          
-          if (cred.password) {
-            credentialFields.push({
-              label: 'Password',
-              value: cred.password
-            });
-          }
-          
-          const fieldsHTML = credentialFields.map(field => `
-            <div class="login-info-field">
-              <span class="login-info-label">${field.label}:</span>
-              <div class="login-info-value-container">
-                <span class="login-info-value" title="${field.value}">${field.value}</span>
-                <button class="login-info-copy" data-value="${field.value}" title="Copy to clipboard">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          `).join('');
-          
-          // Add timestamp to each credential entry
-          const date = new Date(cred.timestamp).toLocaleString();
-          
-          return `
-            <div class="login-info-entry">
-              <div class="login-info-timestamp">${date}</div>
-              <div class="login-info-credentials">
-                ${fieldsHTML}
-              </div>
-            </div>
-          `;
-        }).join('');
-        
-        return `
-          <div class="login-info-item">
-            <div class="login-info-domain">${domain}</div>
-            ${credentialsHTML}
-          </div>
-        `;
-      }).join('');
-      
-      savedLoginInfoElement.innerHTML = allCredentialsHTML;
 
-      // Add view all button if not in fullscreen mode
-      if (!loginInfoViewActive) {
-        const viewAllButton = document.createElement('button');
-        viewAllButton.className = 'view-all-button';
-        viewAllButton.textContent = 'View All Login Information';
-        viewAllButton.addEventListener('click', () => {
-          loginInfoViewActive = true;
-          loginInfoSection.classList.add('fullscreen');
-          
-          // Add back button
-          const backButton = document.createElement('button');
-          backButton.className = 'back-button';
-          backButton.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M19 12H5M12 19l-7-7 7-7"/>
-            </svg>
-            Back to Overview
-          `;
-          backButton.addEventListener('click', () => {
-            loginInfoViewActive = false;
-            loginInfoSection.classList.remove('fullscreen');
-            backButton.remove();
-            updateSavedLoginInfo(); // Refresh the view
-          });
-          
-          loginInfoSection.insertBefore(backButton, loginInfoSection.firstChild);
-          updateSavedLoginInfo(); // Refresh the view in fullscreen mode
+      inboxes.sort((a, b) => b.createdAt - a.createdAt);
+      
+      const isFullView = historyViewActive;
+      const emailsToShow = isFullView ? inboxes : inboxes.slice(0, 5);
+
+      emailHistoryList.innerHTML = emailsToShow
+        .map(inbox => `
+          <div class="email-history-item ${isFullView ? 'full-view' : ''}">
+            <span class="email-history-address">${inbox.address}</span>
+            <span class="email-history-timestamp">${new Date(inbox.createdAt).toLocaleString()}</span>
+          </div>
+        `)
+        .join('');
+        
+      if (!isFullView && inboxes.length > 5) {
+        const viewAllLink = document.createElement('div');
+        viewAllLink.className = 'view-all-link';
+        viewAllLink.textContent = `View all (${inboxes.length})`;
+        viewAllLink.addEventListener('click', () => {
+          historyButton.click();
         });
-        savedLoginInfoElement.appendChild(viewAllButton);
+        emailHistoryList.appendChild(viewAllLink);
+      }
+
+    } catch (error) {
+      console.error('Error loading email history:', error);
+      emailHistoryList.innerHTML = '<div class="email-history-item">Error loading email history</div>';
+    }
+  }
+
+  async function deleteInbox(inboxId) {
+    try {
+      const { inboxes = [], activeInboxId } = await chrome.storage.local.get(['inboxes', 'activeInboxId']);
+      const updatedInboxes = inboxes.filter(inbox => inbox.id !== inboxId);
+      await chrome.storage.local.set({ inboxes: updatedInboxes });
+      
+      if (activeInboxId === inboxId) {
+        const newActiveInbox = updatedInboxes.length > 0 ? updatedInboxes[0].id : null;
+        await chrome.storage.local.set({ activeInboxId: newActiveInbox });
       }
       
-      // Add event listeners for copy buttons
-      const copyButtons = savedLoginInfoElement.querySelectorAll('.login-info-copy');
+      await updateInboxDisplay();
+      if (updatedInboxes.length > 0 && activeInboxId === inboxId) {
+        checkMessages(updatedInboxes[0].id);
+      } else if (updatedInboxes.length === 0) {
+        dropdownSelected.textContent = 'Select an inbox';
+        copyEmailButton.style.display = 'none';
+        messagesListElement.innerHTML = '<div class="message-item">No mail yet</div>';
+        updateLatestOtp(null);
+      }
+      showToast('Inbox deleted');
+    } catch (error) {
+      console.error('Error deleting inbox:', error);
+      showToast('Failed to delete inbox', true);
+    }
+  }
+
+  async function updateInboxDisplay() {
+    try {
+      const { inboxes = [], activeInboxId } = await chrome.storage.local.get(['inboxes', 'activeInboxId']);
+      
+      dropdownList.innerHTML = '';
+
+      if (inboxes.length === 0) {
+        const newInbox = await chrome.runtime.sendMessage({ type: 'createInbox' });
+        if (newInbox.success) {
+          await chrome.storage.local.set({ activeInboxId: newInbox.inbox.id });
+          inboxes.push(newInbox.inbox);
+          await chrome.storage.local.set({ inboxes });
+          await addEmailToHistory(newInbox.inbox.address);
+        } else {
+          throw new Error(newInbox.error);
+        }
+      }
+
+      inboxes.forEach(inbox => {
+        const li = document.createElement('li');
+        li.setAttribute('data-id', inbox.id);
+        li.innerHTML = `
+          <span>${inbox.address}</span>
+          <button class="delete-button" title="Delete Inbox">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m-12 0v14a2 2 0 002 2h10a2 2 0 002-2V6M10 11v6M14 11v6"/>
+            </svg>
+          </button>
+        `;
+        if (inbox.id === activeInboxId) {
+          dropdownSelected.textContent = inbox.address;
+          copyEmailButton.style.display = 'inline-flex';
+        }
+        dropdownList.appendChild(li);
+
+        const deleteButton = li.querySelector('.delete-button');
+        deleteButton.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await deleteInbox(inbox.id);
+        });
+
+        li.addEventListener('click', async () => {
+          await chrome.storage.local.set({ activeInboxId: inbox.id });
+          dropdownSelected.textContent = inbox.address;
+          copyEmailButton.style.display = 'inline-flex';
+          dropdownList.style.display = 'none';
+          await checkMessages(inbox.id);
+        });
+      });
+
+      if (activeInboxId) {
+        const activeInbox = inboxes.find(inbox => inbox.id === activeInboxId);
+        if (activeInbox) {
+          dropdownSelected.textContent = activeInbox.address;
+          copyEmailButton.style.display = 'inline-flex';
+          await checkMessages(activeInboxId);
+        } else {
+          copyEmailButton.style.display = 'none';
+        }
+      } else {
+        dropdownSelected.textContent = 'Select an inbox';
+        copyEmailButton.style.display = 'none';
+      }
+    } catch (error) {
+      console.error('Error updating inbox display:', error);
+      showToast('Failed to load inboxes', true);
+    }
+  }
+
+  async function initializeInboxes() {
+    await updateInboxDisplay();
+    await updateEmailHistory();
+  }
+
+  inboxDropdown.addEventListener('click', () => {
+    dropdownList.style.display = dropdownList.style.display === 'block' ? 'none' : 'block';
+  });
+
+  addInboxButton.addEventListener('click', async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'createInbox' });
+      if (response.success) {
+        const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
+        inboxes.push(response.inbox);
+        await chrome.storage.local.set({ inboxes, activeInboxId: response.inbox.id });
+        await addEmailToHistory(response.inbox.address);
+        await updateInboxDisplay();
+        await checkMessages(response.inbox.id);
+        showToast('New inbox created');
+      } else {
+        throw new Error(response.error);
+      }
+    } catch (error) {
+      console.error('Error creating inbox:', error);
+      showToast('Failed to create inbox', true);
+    }
+  });
+
+  refreshMessagesButton.addEventListener('click', async () => {
+    try {
+      const { activeInboxId } = await chrome.storage.local.get(['activeInboxId']);
+      if (activeInboxId) {
+        await checkMessages(activeInboxId);
+        showToast('Messages refreshed');
+      } else {
+        showToast('No inbox selected', true);
+      }
+    } catch (error) {
+      console.error('Error refreshing messages:', error);
+      showToast('Failed to refresh messages', true);
+    }
+  });
+
+  startSignupButton.addEventListener('click', async () => {
+    try {
+      const { activeInboxId, inboxes = [] } = await chrome.storage.local.get(['activeInboxId', 'inboxes']);
+      if (!activeInboxId) {
+        showToast('No inbox selected', true);
+        return;
+      }
+      const activeInbox = inboxes.find(inbox => inbox.id === activeInboxId);
+      if (!activeInbox) {
+        showToast('Invalid inbox', true);
+        return;
+      }
+      await chrome.runtime.sendMessage({ type: 'startSignup', email: activeInbox.address });
+      showToast('Autofill started');
+    } catch (error) {
+      console.error('Error starting signup:', error);
+      showToast('Failed to start autofill', true);
+    }
+  });
+
+  backButton.addEventListener('click', () => {
+    hideMessageDetail();
+  });
+
+  async function updateSavedLoginInfo() {
+    try {
+      const { loginInfo = {} } = await chrome.storage.local.get(['loginInfo']);
+      
+      if (Object.keys(loginInfo).length === 0) {
+        savedLoginInfo.innerHTML = '<div class="login-info-item">No saved login information</div>';
+        return;
+      }
+
+      const sortedDomains = Object.keys(loginInfo).sort();
+      const isFullView = loginInfoViewActive;
+      const domainsToShow = isFullView ? sortedDomains : sortedDomains.slice(0, 3);
+
+      savedLoginInfo.innerHTML = domainsToShow
+        .map(domain => {
+          const entries = loginInfo[domain] || [];
+          const sortedEntries = entries.sort((a, b) => b.timestamp - a.timestamp);
+          
+          const credentialsHtml = sortedEntries
+            .map(entry => `
+              <div class="login-info-entry">
+                <div class="login-info-timestamp">${new Date(entry.timestamp).toLocaleString()}</div>
+                <div class="login-info-credentials">
+                  ${entry.username ? `
+                    <div class="login-info-field">
+                      <span class="login-info-label">Username:</span>
+                      <span class="login-info-value">${entry.username}</span>
+                      <button class="login-info-copy" data-value="${entry.username}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  ` : ''}
+                  ${entry.email ? `
+                    <div class="login-info-field">
+                      <span class="login-info-label">Email:</span>
+                      <span class="login-info-value">${entry.email}</span>
+                      <button class="login-info-copy" data-value="${entry.email}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  ` : ''}
+                  ${entry.password ? `
+                    <div class="login-info-field">
+                      <span class="login-info-label">Password:</span>
+                      <span class="login-info-value">${entry.password}</span>
+                      <button class="login-info-copy" data-value="${entry.password}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            `)
+            .join('');
+
+          return `
+            <div class="login-info-item">
+              <div class="login-info-domain">${domain}</div>
+              ${credentialsHtml}
+            </div>
+          `;
+        })
+        .join('');
+
+      if (!isFullView && sortedDomains.length > 3) {
+        const viewAllButton = document.createElement('button');
+        viewAllButton.className = 'view-all-button';
+        viewAllButton.textContent = `View all (${sortedDomains.length})`;
+        viewAllButton.addEventListener('click', () => {
+          loginInfoButton.click();
+        });
+        savedLoginInfo.appendChild(viewAllButton);
+      }
+
+      const copyButtons = savedLoginInfo.querySelectorAll('.login-info-copy');
       copyButtons.forEach(button => {
         button.addEventListener('click', () => {
           const value = button.getAttribute('data-value');
           copyToClipboard(value);
         });
       });
-
-      
     } catch (error) {
-      console.error('Error loading saved login information:', error);
-      savedLoginInfoElement.innerHTML = '<div class="login-info-item">Error loading login information</div>';
-    }
-  }
-  
-    async function initializeEmail() {
-      try {
-        // First check if we already have an email stored
-        const { tempEmail } = await chrome.storage.local.get(['tempEmail']);
-        if (tempEmail) {
-          tempEmailElement.textContent = tempEmail;
-          // Start checking for messages
-          checkMessages();
-          // Update email history
-          updateEmailHistory();
-          // Update saved login information
-          updateSavedLoginInfo();
-          // Set up periodic message checking
-          setInterval(checkMessages, 10000); // Check every 10 seconds
-          return;
-        }
-
-      // If no email exists, request a new inbox from the background script
-      const response = await chrome.runtime.sendMessage({ type: 'createInbox' });
-      if (response.success) {
-        tempEmailElement.textContent = response.email;
-        await addEmailToHistory(response.email);
-        // Start checking for messages
-        checkMessages();
-        // Set up periodic message checking
-        setInterval(checkMessages, 10000); // Check every 10 seconds
-      } else {
-        throw new Error(response.error);
-      }
-    } catch (error) {
-      tempEmailElement.textContent = 'Error generating email';
-      updateStatus('Failed to generate temporary email', true);
+      console.error('Error loading login info:', error);
+      savedLoginInfo.innerHTML = '<div class="login-info-item">Error loading login information</div>';
     }
   }
 
-  // Initialize email on load
-  await initializeEmail();
-
-  // Handle refresh email button click
-  refreshEmailButton.addEventListener('click', async () => {
-    tempEmailElement.textContent = 'Generating...';
-    try {
-      // Force creation of a new inbox instead of checking storage
-      const response = await chrome.runtime.sendMessage({ type: 'createInbox', forceNew: true });
-      if (response.success) {
-        tempEmailElement.textContent = response.email;
-        await addEmailToHistory(response.email);
-        updateStatus('Email refreshed successfully');
-      } else {
-        throw new Error(response.error);
-      }
-    } catch (error) {
-      tempEmailElement.textContent = 'Error refreshing email';
-      updateStatus('Failed to refresh temporary email: ' + error.message, true);
-    }
-  });
-
-  // Handle refresh messages button click
-  refreshMessagesButton.addEventListener('click', async () => {
-    await checkMessages();
-    updateStatus('Mail refreshed successfully');
-  });
-
-  // Handle back button click
-  backButton.addEventListener('click', hideMessageDetail);
-  
-  // Listen for credential updates from content script
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.status && !message.isError) {
-      // Update saved login information when form is filled successfully
-      updateSavedLoginInfo();
-    }
-    return true;
-  });
-  
-  // Function to migrate old credentials format to new credentialsHistory format
-  async function migrateCredentials() {
-    try {
-      const { credentials, credentialsHistory = [] } = await chrome.storage.local.get(['credentials', 'credentialsHistory']);
-      
-      // If we have old credentials but no history yet, migrate them
-      if (credentials && credentialsHistory.length === 0) {
-        // Add timestamp to old credentials
-        credentials.timestamp = Date.now();
-        
-        // Create new history with old credentials
-        await chrome.storage.local.set({ 
-          credentialsHistory: [credentials] 
-        });
-        
-        console.log('Migrated old credentials to new format');
-      }
-    } catch (error) {
-      console.error('Error migrating credentials:', error);
-    }
-  }
-  
-  // Call migration function on popup load
-  migrateCredentials();
-
-  // Add click handler for copy email button
-  document.getElementById('copyEmailButton').addEventListener('click', () => {
-    const emailText = tempEmailElement.textContent;
-    if (emailText && emailText !== 'Generating...') {
-      copyToClipboard(emailText).then(() => {
-        updateStatus('Email address copied to clipboard');
-      });
-    }
-  });
-
-  // Handle start signup button click
-  startSignupButton.addEventListener('click', async () => {
-    try {
-      // Get the active tab
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab) {
-        throw new Error('No active tab found');
-      }
-
-      // Inject content script with error handling
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['content.js']
-        });
-      } catch (err) {
-        // If script is already injected, this error can be ignored
-        if (!err.message.includes('already exists')) {
-          throw err;
-        }
-      }
-
-      // Send message to content script with timeout
-      const timeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timed out')), 5000)
-      );
-
-      const messagePromise = chrome.tabs.sendMessage(tab.id, { action: 'startSignup' });
-      const response = await Promise.race([messagePromise, timeout]);
-
-      if (!response) {
-        throw new Error('No response received from content script');
-      }
-
-      updateStatus('Signup process started successfully');
-    } catch (error) {
-      if (error.message.includes('Connection timed out')) {
-        updateStatus('Connection timed out. Please refresh the page and try again', true);
-      } else if (error.message.includes('could not establish connection')) {
-        updateStatus('Please refresh the page and try again', true);
-      } else {
-        updateStatus(`Failed to start signup process: ${error.message}`, true);
-      }
-      console.error('Error starting signup:', error);
-    }
-  });
+  await initializeInboxes();
 });
