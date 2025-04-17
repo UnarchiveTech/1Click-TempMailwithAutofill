@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const startSignupButton = document.getElementById('startSignup');
   const refreshMessagesButton = document.getElementById('refreshMessages');
   const themeToggleButton = document.getElementById('themeToggle');
-  const statusElement = document.getElementById('status');
   const messagesListElement = document.getElementById('messagesList');
   const messageDetailElement = document.getElementById('messageDetail');
   const messageDetailContentElement = document.getElementById('messageDetailContent');
@@ -18,11 +17,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const copyOtpButton = document.getElementById('copyOtpButton');
   const historyButton = document.getElementById('historyButton');
   const reportIssueButton = document.getElementById('reportIssue');
+  const loginInfoButton = document.getElementById('loginInfoButton');
   const loginInfoSection = document.querySelector('.login-info-section');
   const savedLoginInfo = document.getElementById('savedLoginInfo');
   const exportDataButton = document.getElementById('exportData');
   const importDataButton = document.getElementById('importData');
+  const searchMessagesInput = document.getElementById('searchMessages');
+  const otpFilterCheckbox = document.getElementById('otpFilter');
+  const analyticsButton = document.getElementById('analyticsButton');
+  const analyticsSection = document.querySelector('.analytics-section');
+  const analyticsDashboard = document.getElementById('analyticsDashboard');
+  const notificationsToggle = document.getElementById('notificationsToggle');
   let loginInfoViewActive = false;
+  let analyticsViewActive = false;
 
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
@@ -34,6 +41,85 @@ document.addEventListener('DOMContentLoaded', async () => {
   const emailHistoryList = document.getElementById('emailHistoryList');
   let historyViewActive = false;
 
+  let currentFilters = {
+    searchQuery: '',
+    hasOTP: false
+  };
+
+  // Initialize notifications toggle
+  async function initializeNotifications() {
+    try {
+      const { notificationSettings = { enabled: true } } = await chrome.storage.local.get(['notificationSettings']);
+      const notificationsToggle = document.getElementById('notificationsToggle');
+      notificationsToggle.setAttribute('data-enabled', notificationSettings.enabled);
+      updateNotificationIcon(notificationsToggle, notificationSettings.enabled);
+      if (notificationSettings.enabled) {
+        await requestNotificationPermission();
+      }
+    } catch (error) {
+      console.error('Error initializing notifications:', error);
+      showToast('Failed to initialize notifications', true);
+    }
+  }
+
+  // Request notification permission
+  async function requestNotificationPermission() {
+    if (!('Notification' in window)) {
+      showToast('Notifications not supported in this browser', true);
+      notificationsToggle.checked = false;
+      await chrome.storage.local.set({ notificationSettings: { enabled: false } });
+      return;
+    }
+
+    if (Notification.permission === 'default') {
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          notificationsToggle.checked = false;
+          await chrome.storage.local.set({ notificationSettings: { enabled: false } });
+          showToast('Notifications permission denied', true);
+        }
+      } catch (error) {
+        console.error('Error requesting notification permission:', error);
+        showToast('Failed to request notification permission', true);
+      }
+    } else if (Notification.permission === 'denied') {
+      notificationsToggle.checked = false;
+      await chrome.storage.local.set({ notificationSettings: { enabled: false } });
+      showToast('Notifications permission denied', true);
+    }
+  }
+
+  function updateNotificationIcon(button, enabled) {
+    button.setAttribute('data-enabled', enabled);
+    button.querySelector('.notification-enabled').style.display = enabled ? 'inline' : 'none';
+    button.querySelector('.notification-disabled').style.display = enabled ? 'none' : 'inline';
+  }
+  
+  // Handle notifications toggle
+  notificationsToggle.addEventListener('click', async () => {
+    const currentEnabled = notificationsToggle.getAttribute('data-enabled') === 'true';
+    const enabled = !currentEnabled;
+    try {
+      await chrome.storage.local.set({ notificationSettings: { enabled } });
+      updateNotificationIcon(notificationsToggle, enabled);
+      if (enabled) {
+        await requestNotificationPermission();
+        if (Notification.permission !== 'granted') {
+          updateNotificationIcon(notificationsToggle, false);
+          await chrome.storage.local.set({ notificationSettings: { enabled: false } });
+          showToast('Notifications permission denied', true);
+          return;
+        }
+      }
+      showToast(`Notifications ${enabled ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      console.error('Error updating notification settings:', error);
+      showToast('Failed to update notification settings', true);
+      updateNotificationIcon(notificationsToggle, currentEnabled); // Revert icon
+    }
+  });
+
   loginInfoButton.addEventListener('click', () => {
     loginInfoViewActive = !loginInfoViewActive;
     
@@ -41,6 +127,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateSavedLoginInfo();
       loginInfoSection.style.display = 'block';
       loginInfoSection.classList.add('fullscreen');
+      historySection.style.display = 'none';
+      analyticsSection.style.display = 'none';
+      historyViewActive = false;
+      analyticsViewActive = false;
       
       if (!document.getElementById('loginInfoBackButton')) {
         const backButton = document.createElement('button');
@@ -62,6 +152,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         loginInfoSection.insertBefore(backButton, loginInfoSection.firstChild);
       }
+    } else {
+      loginInfoSection.classList.remove('fullscreen');
+      loginInfoSection.style.display = 'none';
+      if (document.getElementById('loginInfoBackButton')) {
+        document.getElementById('loginInfoBackButton').remove();
+      }
     }
   });
 
@@ -72,6 +168,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateEmailHistory();
       historySection.style.display = 'block';
       historySection.classList.add('fullscreen');
+      loginInfoSection.style.display = 'none';
+      analyticsSection.style.display = 'none';
+      loginInfoViewActive = false;
+      analyticsViewActive = false;
       
       if (!document.getElementById('historyBackButton')) {
         const backButton = document.createElement('button');
@@ -92,6 +192,53 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
         historySection.insertBefore(backButton, historySection.firstChild);
+      }
+    } else {
+      historySection.classList.remove('fullscreen');
+      historySection.style.display = 'none';
+      if (document.getElementById('historyBackButton')) {
+        document.getElementById('historyBackButton').remove();
+      }
+    }
+  });
+
+  analyticsButton.addEventListener('click', () => {
+    analyticsViewActive = !analyticsViewActive;
+    
+    if (analyticsViewActive) {
+      updateAnalyticsDashboard();
+      analyticsSection.style.display = 'block';
+      analyticsSection.classList.add('fullscreen');
+      loginInfoSection.style.display = 'none';
+      historySection.style.display = 'none';
+      loginInfoViewActive = false;
+      historyViewActive = false;
+      
+      if (!document.getElementById('analyticsBackButton')) {
+        const backButton = document.createElement('button');
+        backButton.id = 'analyticsBackButton';
+        backButton.className = 'back-button';
+        backButton.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Back
+        `;
+        backButton.addEventListener('click', () => {
+          analyticsViewActive = false;
+          analyticsSection.classList.remove('fullscreen');
+          analyticsSection.style.display = 'none';
+          if (document.getElementById('analyticsBackButton')) {
+            document.getElementById('analyticsBackButton').remove();
+          }
+        });
+        analyticsSection.insertBefore(backButton, analyticsSection.firstChild);
+      }
+    } else {
+      analyticsSection.classList.remove('fullscreen');
+      analyticsSection.style.display = 'none';
+      if (document.getElementById('analyticsBackButton')) {
+        document.getElementById('analyticsBackButton').remove();
       }
     }
   });
@@ -190,17 +337,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 3000);
   }
 
-  function updateStatus(message, isError = false) {
-    showToast(message, isError);
-  }
-
   async function copyToClipboard(text) {
     try {
       await navigator.clipboard.writeText(text);
-      updateStatus('Copied to clipboard');
+      showToast('Copied to clipboard');
     } catch (err) {
       console.error('Failed to copy: ', err);
-      updateStatus('Failed to copy', true);
+      showToast('Failed to copy', true);
     }
   }
 
@@ -239,7 +382,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const messageWindow = window.open('', '_blank', `popup=yes,width=${width},height=${height},left=${left},top=${top},titlebar=no,frame=no,toolbar=no,menubar=no,location=no,status=no,resizable=no,chrome=no,dialog=yes`);
     if (!messageWindow) {
-      updateStatus('Popup blocked. Please allow popups for this site.', true);
+      showToast('Popup blocked. Please allow popups for this site.', true);
       return;
     }
 
@@ -311,41 +454,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             user-select: text;
             -webkit-user-select: text;
           }
-          .close-button {
-            position: absolute;
-            top: -10px;
-            right: -10px;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: #ff4444;
-            color: white;
-            border: none;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            line-height: 1;
-            padding: 0;
-            z-index: 1000;
-          }
-          .close-button:hover {
-            background: #ff0000;
-          }
-          ::-webkit-scrollbar {
-            width: 8px;
-          }
-          ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-          }
-          ::-webkit-scrollbar-thumb {
-            background: #888;
-            border-radius: 4px;
-          }
-          ::-webkit-scrollbar-thumb:hover {
-            background: #555;
-          }
           .otp-section {
             background: #f0f8ff;
             padding: 15px;
@@ -386,6 +494,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             border-radius: 12px;
             font-size: 12px;
             margin-left: 8px;
+          }
+          ::-webkit-scrollbar {
+            width: 8px;
+          }
+          ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+          }
+          ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+          }
+          ::-webkit-scrollbar-thumb:hover {
+            background: #555;
           }
         </style>
         <script nonce="${nonce}">
@@ -450,15 +571,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   function displayMessages(messages) {
     messagesListElement.innerHTML = '';
     if (messages.length === 0) {
-      messagesListElement.innerHTML = '<div class="message-item">No mail yet</div>';
+      messagesListElement.innerHTML = '<div class="message-item">No messages found</div>';
       updateLatestOtp(null);
       return;
     }
 
     const latestOtp = findLatestOtp(messages);
-    if (latestOtp) {
-      updateLatestOtp(latestOtp);
-    }
+    updateLatestOtp(latestOtp);
 
     const sortedMessages = [...messages].sort((a, b) => b.received_at - a.received_at);
 
@@ -500,7 +619,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function checkMessages(inboxId) {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'checkEmails', inboxId });
+      const response = await chrome.runtime.sendMessage({ 
+        type: 'checkEmails', 
+        inboxId, 
+        filters: currentFilters 
+      });
       if (response.success) {
         displayMessages(response.messages);
       } else {
@@ -508,7 +631,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     } catch (error) {
       console.error('Error checking mail:', error);
-      updateStatus('Failed to check mail', true);
+      showToast('Failed to check mail', true);
     }
   }
 
@@ -664,6 +787,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function initializeInboxes() {
     await updateInboxDisplay();
     await updateEmailHistory();
+    await updateAnalyticsDashboard();
+    await initializeNotifications();
   }
 
   inboxDropdown.addEventListener('click', () => {
@@ -680,6 +805,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await addEmailToHistory(response.inbox.address);
         await updateInboxDisplay();
         await checkMessages(response.inbox.id);
+        await updateAnalyticsDashboard();
         showToast('New inbox created');
       } else {
         throw new Error(response.error);
@@ -695,6 +821,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const { activeInboxId } = await chrome.storage.local.get(['activeInboxId']);
       if (activeInboxId) {
         await checkMessages(activeInboxId);
+        await updateAnalyticsDashboard();
         showToast('Messages refreshed');
       } else {
         showToast('No inbox selected', true);
@@ -702,6 +829,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
       console.error('Error refreshing messages:', error);
       showToast('Failed to refresh messages', true);
+    }
+  });
+
+  // Debounce function to limit rapid search updates
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  const debouncedCheckMessages = debounce(async (inboxId) => {
+    await checkMessages(inboxId);
+  }, 300);
+
+  searchMessagesInput.addEventListener('input', async () => {
+    currentFilters.searchQuery = searchMessagesInput.value.trim();
+    const { activeInboxId } = await chrome.storage.local.get(['activeInboxId']);
+    if (activeInboxId) {
+      debouncedCheckMessages(activeInboxId);
+    }
+  });
+
+  otpFilterCheckbox.addEventListener('change', async () => {
+    currentFilters.hasOTP = otpFilterCheckbox.checked;
+    const { activeInboxId } = await chrome.storage.local.get(['activeInboxId']);
+    if (activeInboxId) {
+      await checkMessages(activeInboxId);
     }
   });
 
@@ -822,6 +982,78 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
       console.error('Error loading login info:', error);
       savedLoginInfo.innerHTML = '<div class="login-info-item">Error loading login information</div>';
+    }
+  }
+
+  async function fetchAnalyticsWithRetry(maxRetries = 3, delay = 500) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({ type: 'getAnalytics' }, (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+            } else {
+              resolve(response);
+            }
+          });
+        });
+
+        if (!response) {
+          throw new Error('No response received from background script');
+        }
+
+        if (response.success && response.analytics) {
+          console.log('Analytics fetched successfully:', response.analytics);
+          return response.analytics;
+        } else {
+          throw new Error(response.error || 'No analytics data received');
+        }
+      } catch (error) {
+        console.warn(`Analytics fetch attempt ${attempt} failed:`, error);
+        if (attempt === maxRetries) {
+          throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  async function updateAnalyticsDashboard() {
+    try {
+      const analytics = await fetchAnalyticsWithRetry();
+      
+      const createdAt = analytics.createdAt ? new Date(analytics.createdAt).toLocaleDateString() : 'N/A';
+      const inboxesCreated = analytics.inboxesCreated || 0;
+      const emailsReceived = analytics.emailsReceived || 0;
+      const otpsDetected = analytics.otpsDetected || 0;
+      const notificationsSent = analytics.notificationsSent || 0;
+
+      analyticsDashboard.innerHTML = `
+        <div class="analytics-item">
+          <span class="analytics-label">Tracking Since:</span>
+          <span class="analytics-value">${createdAt}</span>
+        </div>
+        <div class="analytics-item">
+          <span class="analytics-label">Inboxes Created:</span>
+          <span class="analytics-value">${inboxesCreated}</span>
+        </div>
+        <div class="analytics-item">
+          <span class="analytics-label">Emails Received:</span>
+          <span class="analytics-value">${emailsReceived}</span>
+        </div>
+        <div class="analytics-item">
+          <span class="analytics-label">OTPs Detected:</span>
+          <span class="analytics-value">${otpsDetected}</span>
+        </div>
+        <div class="analytics-item">
+          <span class="analytics-label">Notifications Sent:</span>
+          <span class="analytics-value">${notificationsSent}</span>
+        </div>
+      `;
+    } catch (error) {
+      console.error('Error loading analytics:', error);
+      analyticsDashboard.innerHTML = '<div class="analytics-item">Failed to load analytics. Please try again.</div>';
+      showToast('Failed to load analytics', true);
     }
   }
 
