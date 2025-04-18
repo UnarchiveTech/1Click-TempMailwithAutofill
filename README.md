@@ -23,7 +23,7 @@ A powerful Chrome extension designed to simplify online signups by generating di
 1. Clone or download this repository to your local machine:
 
    ```bash
-   git clone https://github.com/EveryWebStuffs/1click-autofill-temp-mail.git
+   git clone https://github.com/EveryWebStuffs/1Click-Autofill-with-Temp-Mail.git
    ```
 
 2. Open Chrome and navigate to `chrome://extensions/`.
