@@ -41,6 +41,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     return date.toLocaleString();
   }
 
+  function calculateTimeLeft(expiresAt) {
+    return Math.max(0, expiresAt - Date.now());
+  }
+
+  function formatTimeLeft(seconds) {
+    const hours = Math.floor(seconds / 3600000);
+    const minutes = Math.floor((seconds % 3600000) / 60000);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }
+
   try {
     const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
 
@@ -52,12 +63,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     inboxes.sort((a, b) => b.createdAt - a.createdAt);
 
     emailListElement.innerHTML = inboxes
-      .map(inbox => `
-        <div class="email-item">
-          <span class="email-address">${inbox.address}</span>
-          <span class="timestamp">${formatDate(inbox.createdAt)}</span>
-        </div>
-      `)
+      .map(inbox => {
+        const timeLeft = inbox.expiresAt ? calculateTimeLeft(inbox.expiresAt) : null;
+        const expiryWarning = timeLeft && timeLeft <= 3600 ? ' expiry-warning' : '';
+        const expiryText = timeLeft ? `Expires in ${formatTimeLeft(timeLeft)}` : '';
+        
+        return `
+          <div class="email-item${expiryWarning}">
+            <span class="email-address">${inbox.address}</span>
+            <span class="timestamp">${formatDate(inbox.createdAt)}</span>
+            ${expiryText ? `<span class="email-expiry">${expiryText}</span>` : ''}
+          </div>
+        `;
+      })
       .join('');
 
   } catch (error) {

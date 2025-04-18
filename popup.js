@@ -245,7 +245,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   reportIssueButton.addEventListener('click', () => {
     chrome.tabs.create({
-      url: 'https://github.com/TejasMate/1Click-Autofill-with-Temp-Mail/issues/new'
+      url: 'https://github.com/EveryWebStuffs/1Click-Autofill-with-Temp-Mail/issues/new'
     });
   });
 
@@ -363,7 +363,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function updateLatestOtp(otp) {
     if (otp) {
-      latestOtpContainer.style.display = 'block';
+      latestOtpContainer.style.display = 'flex';
       latestOtpCode.textContent = otp;
     } else {
       latestOtpContainer.style.display = 'none';
@@ -571,7 +571,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function displayMessages(messages) {
     messagesListElement.innerHTML = '';
     if (messages.length === 0) {
-      messagesListElement.innerHTML = '<div class="message-item">No messages found</div>';
+      messagesListElement.innerHTML = '<div class="message-item">No emails found</div>';
       updateLatestOtp(null);
       return;
     }
@@ -664,12 +664,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       const emailsToShow = isFullView ? inboxes : inboxes.slice(0, 5);
 
       emailHistoryList.innerHTML = emailsToShow
-        .map(inbox => `
-          <div class="email-history-item ${isFullView ? 'full-view' : ''}">
-            <span class="email-history-address">${inbox.address}</span>
-            <span class="email-history-timestamp">${new Date(inbox.createdAt).toLocaleString()}</span>
-          </div>
-        `)
+        .map(inbox => {
+          const timeLeft = inbox.expiresAt ? calculateTimeLeft(inbox.expiresAt) : null;
+          const expiryWarning = timeLeft && timeLeft <= 3600 ? ' expiry-warning' : '';
+          const expiryText = timeLeft ? `Expires in ${formatTimeLeft(timeLeft)}` : '';
+          
+          return `
+            <div class="email-history-item${isFullView ? ' full-view' : ''}${expiryWarning}">
+              <span class="email-history-address">${inbox.address}</span>
+              <span class="email-history-timestamp">${new Date(inbox.createdAt).toLocaleString()}</span>
+              ${expiryText ? `<span class="email-history-expiry">${expiryText}</span>` : ''}
+            </div>
+          `;
+        })
         .join('');
         
       if (!isFullView && inboxes.length > 5) {
@@ -686,6 +693,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.error('Error loading email history:', error);
       emailHistoryList.innerHTML = '<div class="email-history-item">Error loading email history</div>';
     }
+  }
+
+  function calculateTimeLeft(expiresAt) {
+    return Math.max(0, expiresAt - Date.now());
+  }
+
+  function formatTimeLeft(seconds) {
+    const hours = Math.floor(seconds / 3600000);
+    const minutes = Math.floor((seconds % 3600000) / 60000);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
   }
 
   async function deleteInbox(inboxId) {
@@ -736,8 +754,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       inboxes.forEach(inbox => {
         const li = document.createElement('li');
         li.setAttribute('data-id', inbox.id);
+        const timeLeft = inbox.expiresAt ? calculateTimeLeft(inbox.expiresAt) : null;
+        const expiryText = timeLeft ? ` (Expires in ${formatTimeLeft(timeLeft)})` : '';
         li.innerHTML = `
-          <span>${inbox.address}</span>
+          <span>${inbox.address}${expiryText}</span>
           <button class="delete-button" title="Delete Inbox">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m-12 0v14a2 2 0 002 2h10a2 2 0 002-2V6M10 11v6M14 11v6"/>

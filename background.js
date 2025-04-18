@@ -4,6 +4,7 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('OneClickAutofill with TempMail extension installed');
   initializeAnalytics();
   setupPeriodicEmailCheck();
+  setupInboxExpiryCheck();
 });
 
 // Initialize analytics storage
@@ -49,6 +50,59 @@ function setupPeriodicEmailCheck() {
   });
 }
 
+// Setup periodic inbox expiry checking
+function setupInboxExpiryCheck() {
+  chrome.alarms.create('checkInboxExpiry', {
+    periodInMinutes: 1 // Check every 1 minute
+  });
+
+  chrome.alarms.onAlarm.addListener(async (alarm) => {
+    if (alarm.name === 'checkInboxExpiry') {
+      try {
+        const { inboxes = [], notificationSettings = { enabled: true } } = await chrome.storage.local.get(['inboxes', 'notificationSettings']);
+        if (!notificationSettings.enabled || inboxes.length === 0) {
+          console.log('Notifications disabled or no inboxes to check for expiry');
+          return;
+        }
+
+        const now = Date.now();
+        for (const inbox of inboxes) {
+          if (inbox.expiresAt && inbox.expiresAt <= now) {
+            await deleteInbox(inbox.id);
+            if (notificationSettings.enabled) {
+              chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'icons/icon48.png',
+                title: 'Inbox Expired',
+                message: `The inbox ${inbox.address} has expired and was removed.`,
+                priority: 1
+              });
+            }
+            continue;
+          }
+
+          const timeLeft = inbox.expiresAt ? inbox.expiresAt - now : null;
+          if (timeLeft && timeLeft <= 3600000 && !inbox.expiryNotified) {
+            if (notificationSettings.enabled) {
+              chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'icons/icon48.png',
+                title: 'Inbox Expiring Soon',
+                message: `The inbox ${inbox.address} will expire in less than 1 hour.`,
+                priority: 1
+              });
+            }
+            inbox.expiryNotified = true;
+            await chrome.storage.local.set({ inboxes });
+          }
+        }
+      } catch (error) {
+        console.error('Error in periodic inbox expiry check:', error);
+      }
+    }
+  });
+}
+
 // Create a new temporary email inbox
 async function createInbox() {
   try {
@@ -70,7 +124,9 @@ async function createInbox() {
       id: email.id,
       address: email.address,
       token,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours expiry
+      expiryNotified: false
     };
 
     // Store the new inbox

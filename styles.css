@@ -1,4 +1,4 @@
-/* Main Styles for OneClickAutofill with TempMail */
+/* Main Styles for 1ClickAutofill with TempMail */
 
 /* Auto-fill Button Styles */
 .autofill-button-container {
@@ -48,42 +48,42 @@
 
 :root {
   /* Light Theme Variables */
-  --primary-color: #4285F4;
-  --primary-hover: #3367D6;
-  --secondary-color: #34A853;
-  --secondary-hover: #2E7D32;
-  --accent-color: #FBBC05;
-  --error-color: #EA4335;
-  --success-color: #34A853;
-  --text-primary: #202124;
-  --text-secondary: #5F6368;
+  --primary-color: #2563EB;
+  --primary-hover: #1D4ED8;
+  --secondary-color: #10B981;
+  --secondary-hover: #059669;
+  --accent-color: #F59E0B;
+  --error-color: #EF4444;
+  --success-color: #10B981;
+  --text-primary: #1F2937;
+  --text-secondary: #6B7280;
   --bg-primary: #FFFFFF;
-  --bg-secondary: #F8F9FA;
-  --bg-tertiary: #F1F3F4;
-  --border-color: #DADCE0;
-  --shadow-color: rgba(60, 64, 67, 0.3);
-  --otp-bg: #E8F0FE;
-  --otp-border: #4285F4;
-  --otp-text: #1A73E8;
+  --bg-secondary: #F9FAFB;
+  --bg-tertiary: #E5E7EB;
+  --border-color: #D1D5DB;
+  --shadow-color: rgba(31, 41, 55, 0.2);
+  --otp-bg: #EFF6FF;
+  --otp-border: #2563EB;
+  --otp-text: #1D4ED8;
   
   /* Dark Theme Variables (will be applied via JS) */
-  --dark-primary-color: #8AB4F8;
-  --dark-primary-hover: #669DF6;
-  --dark-secondary-color: #81C995;
-  --dark-secondary-hover: #5BB974;
-  --dark-accent-color: #FDD663;
-  --dark-error-color: #F28B82;
-  --dark-success-color: #81C995;
-  --dark-text-primary: #E8EAED;
-  --dark-text-secondary: #9AA0A6;
-  --dark-bg-primary: #202124;
-  --dark-bg-secondary: #292A2D;
-  --dark-bg-tertiary: #3C4043;
-  --dark-border-color: #5F6368;
-  --dark-shadow-color: rgba(0, 0, 0, 0.5);
-  --dark-otp-bg: #174EA6;
-  --dark-otp-border: #8AB4F8;
-  --dark-otp-text: #D2E3FC;
+  --dark-primary-color: #60A5FA;
+  --dark-primary-hover: #3B82F6;
+  --dark-secondary-color: #34D399;
+  --dark-secondary-hover: #10B981;
+  --dark-accent-color: #FBBF24;
+  --dark-error-color: #F87171;
+  --dark-success-color: #34D399;
+  --dark-text-primary: #F3F4F6;
+  --dark-text-secondary: #9CA3AF;
+  --dark-bg-primary: #111827;
+  --dark-bg-secondary: #1F2A44;
+  --dark-bg-tertiary: #374151;
+  --dark-border-color: #4B5563;
+  --dark-shadow-color: rgba(0, 0, 0, 0.6);
+  --dark-otp-bg: #1E3A8A;
+  --dark-otp-border: #60A5FA;
+  --dark-otp-text: #BFDBFE;
 }
 
 /* Base Styles */
@@ -165,41 +165,83 @@ body {
   right: 0;
   background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  max-height: 150px;
+  border-radius: 8px;
+  max-height: 200px;
   overflow-y: auto;
   z-index: 1000;
   margin: 4px 0;
-  box-shadow: 0 2px 4px var(--shadow-color);
+  box-shadow: 0 4px 12px var(--shadow-color);
+  padding: 4px 0;
+}
+
+.dropdown-list.active {
+  display: block;
 }
 
 .dropdown-list li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px;
+  padding: 10px 12px;
   cursor: pointer;
   color: var(--text-primary);
-  transition: background-color 0.2s;
+  font-size: 15px;
+  line-height: 1.5;
+  border-radius: 6px;
+  margin: 0 4px;
+  transition: background-color 0.2s, transform 0.1s;
   word-break: break-all;
+  position: relative;
 }
 
 .dropdown-list li:hover {
   background-color: var(--bg-secondary);
+  transform: translateX(2px);
+}
+
+.dropdown-list li:focus {
+  outline: none;
+  background-color: var(--bg-secondary);
+  box-shadow: 0 0 0 2px var(--primary-color);
+}
+
+.dropdown-list li.selected {
+  font-weight: 500;
+  color: var(--primary-color);
+}
+
+.dropdown-list li.selected::before {
+  content: '✓';
+  position: absolute;
+  left: 4px;
+  font-size: 14px;
+  color: var(--primary-color);
 }
 
 .dropdown-list .delete-button {
   background: transparent;
   border: none;
-  padding: 4px;
+  padding: 6px;
   cursor: pointer;
   color: var(--error-color);
   display: flex;
   align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s, transform 0.1s;
+  min-width: 28px;
+  min-height: 28px;
 }
 
 .dropdown-list .delete-button:hover {
-  background-color: rgba(234, 67, 53, 0.1);
+  background-color: rgba(234, 67, 53, 0.15);
+  transform: scale(1.1);
+}
+
+.dropdown-list .delete-button svg {
+  width: 16px;
+  height: 16px;
+  fill: var(--error-color);
 }
 
 /* Header Styles */
@@ -210,7 +252,6 @@ body {
   padding: 6px 8px;
   background-color: var(--primary-color);
   color: white;
-  border-radius: 0 0 8px 8px;
   box-shadow: 0 2px 4px var(--shadow-color);
   position: relative;
 }
@@ -231,6 +272,15 @@ body {
   background-color: var(--bg-secondary);
   border-radius: 8px;
   box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+.action-buttons-inbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
 }
 
 /* Button Styles */
@@ -330,14 +380,14 @@ body.dark-mode .icon-button svg {
 .otp-container {
   background-color: var(--otp-bg);
   border-radius: 8px;
-  padding: 8px 12px;
+  padding: 0px 10px;
   border: 1px solid var(--otp-border);
   transition: all 0.3s;
   box-sizing: border-box;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: initial;
   flex-direction: row;
   gap: 8px;
 }
@@ -363,11 +413,12 @@ body.dark-mode .icon-button svg {
 }
 
 .otp-header {
-  display: flex;
+  display: contents;
   justify-content: flex-start;
   align-items: center;
   margin-bottom: 0;
   margin-right: 8px;
+  flex-direction: column
 }
 
 .otp-title {
@@ -379,7 +430,6 @@ body.dark-mode .icon-button svg {
 }
 
 .otp-display {
-  background-color: white;
   border-radius: 8px;
   padding: 8px 10px;
   font-size: 15px;
@@ -389,7 +439,7 @@ body.dark-mode .icon-button svg {
   color: var(--otp-text);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: initial;
 }
 
 .otp-display button {
@@ -436,8 +486,9 @@ body.dark-mode .otp-display button:hover {
 .messages-container {
   background-color: var(--bg-secondary);
   border-radius: 8px;
-  padding: 8px;
+  padding: 0px;
   box-shadow: 0 1px 3px var(--shadow-color);
+  height:275px;
 }
 
 .messages-header {
@@ -955,6 +1006,11 @@ body.dark-mode .login-info-copy:hover {
   background-color: var(--error-color);
 }
 
+.toast.expiry {
+  background-color: var(--accent-color);
+  color: var(--text-primary);
+}
+
 /* Dark Mode Styles */
 body.dark-mode {
   color: var(--dark-text-primary);
@@ -980,6 +1036,10 @@ body.dark-mode .about-section {
   box-shadow: 0 1px 3px var(--dark-shadow-color);
 }
 
+body.dark-mode .action-buttons-inbox {
+  background-color: var(--dark-bg-secondary);
+}
+
 body.dark-mode .inbox-dropdown {
   background-color: var(--dark-bg-secondary);
   border-color: var(--dark-border-color);
@@ -989,6 +1049,7 @@ body.dark-mode .inbox-dropdown {
 body.dark-mode .dropdown-list {
   background-color: var(--dark-bg-primary);
   border-color: var(--dark-border-color);
+  box-shadow: 0 4px 12px var(--dark-shadow-color);
 }
 
 body.dark-mode .dropdown-list li {
@@ -997,6 +1058,32 @@ body.dark-mode .dropdown-list li {
 
 body.dark-mode .dropdown-list li:hover {
   background-color: var(--dark-bg-tertiary);
+  transform: translateX(2px);
+}
+
+body.dark-mode .dropdown-list li:focus {
+  background-color: var(--dark-bg-tertiary);
+  box-shadow: 0 0 0 2px var(--dark-primary-color);
+}
+
+body.dark-mode .dropdown-list li.selected {
+  color: var(--dark-primary-color);
+}
+
+body.dark-mode .dropdown-list li.selected::before {
+  color: var(--dark-primary-color);
+}
+
+body.dark-mode .dropdown-list .delete-button {
+  color: var(--dark-error-color);
+}
+
+body.dark-mode .dropdown-list .delete-button:hover {
+  background-color: rgba(242, 139, 130, 0.15);
+}
+
+body.dark-mode .dropdown-list .delete-button svg {
+  fill: var(--dark-error-color);
 }
 
 body.dark-mode .email-address {
@@ -1177,4 +1264,9 @@ body.dark-mode .notification-icon svg {
 
 body.dark-mode .notification-icon:hover {
   background-color: rgba(138, 180, 248, 0.2);
+}
+
+body.dark-mode .toast.expiry {
+  background-color: var(--dark-accent-color);
+  color: var(--dark-text-primary);
 }

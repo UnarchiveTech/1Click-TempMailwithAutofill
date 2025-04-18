@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OneClickAutofill with TempMail</title>
+  <title>1Click Autofill with TempMail</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div class="header">
+    <h2>1Click Autofill with TempMail</h2>
+  </div>
   <div class="container">
-    <div class="header">
-      <h2>1ClickAutofill with TempMail</h2>
-    </div>
+
 
     <div id="inboxContainer" class="inbox-container">
       <div class="horizontal-section">
@@ -34,53 +35,30 @@
       </div>
     </div>
 
-    <div id="latestOtpContainer" class="otp-container" style="display: none;">
-      <div class="otp-header">
-        <h3 class="otp-title">Latest OTP</h3>
-      </div>
-      <div class="otp-display">
-        <span id="latestOtpCode">------</span>
-        <button id="copyOtpButton" class="copy-button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-          </svg>
-          Copy
-        </button>
-      </div>
-    </div>
-
-    <div class="action-buttons">
-      <button id="startSignup">Start Signup</button>
-      <button id="refreshMessages" class="icon-button" title="Refresh Messages">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M23 4v6h-6M1 20v-6h6"/>
-          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-        </svg>
-      </button>
-      <button id="themeToggle" class="icon-button" title="Toggle Theme">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
-        </svg>
-      </button>
-      <button id="notificationsToggle" class="icon-button notification-icon" title="Toggle Notifications" data-enabled="true">
-        <svg class="notification-enabled" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-        </svg>
-        <svg class="notification-disabled" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
-          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9h-18s3-2 3-9" />
-          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-          <path d="M2 2l20 20" />
-        </svg>
-      </button>
-    </div>
-
     <div class="messages-container">
       <div class="messages-header">
-        <h3 class="messages-title">Messages</h3>
+        <div class="action-buttons-inbox">
+          <h3 class="messages-title">Inbox</h3>
+          <button id="refreshMessages" class="icon-button" title="Refresh Messages">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6M1 20v-6h6"/>
+              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+            </svg>
+          </button>
+          <button id="notificationsToggle" class="icon-button notification-icon" title="Toggle Notifications" data-enabled="true">
+            <svg class="notification-enabled" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <svg class="notification-disabled" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9h-18s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+              <path d="M2 2l20 20" />
+            </svg>
+          </button>
+        </div>
         <div class="messages-controls">
-          <input type="text" id="searchMessages" class="search-input" placeholder="Search messages...">
+          <input type="text" id="searchMessages" class="search-input" placeholder="Search emails...">
           <label class="otp-filter">
             <input type="checkbox" id="otpFilter"> OTP only
           </label>
@@ -88,6 +66,22 @@
       </div>
       <div id="messagesList"></div>
     </div>
+    <div class="otp-container" id="latestOtpContainer">
+      <h3>Latest OTP</h3>
+      <div class="otp-header">
+        <div class="otp-display">
+          <span id="latestOtpCode">------</span>
+          <button id="copyOtpButton" class="icon-button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    <button id="startSignup">Autofill Details</button>
+
 
     <div class="history-section">
       <div class="history-header">
@@ -111,8 +105,13 @@
     </div>
 
     <div class="about-section">
-      <span class="version">v1.0.0</span>
+      <span class="version">v1.1.0</span>
       <div class="about-buttons">
+        <button id="themeToggle" class="icon-button" title="Toggle Theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+          </svg>
+        </button>
         <button id="historyButton" class="icon-button" title="Email History">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -155,7 +154,9 @@
       </button>
       <div id="messageDetailContent"></div>
     </div>
+    
   </div>
   <script src="popup.js"></script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'931a175dba60b040',t:'MTc0NDg3MzcwNy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+  <script src="data-manager.js"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'931a175dba60b040',t:'MTc0NDg3MzcwNy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'931c4724ef294548',t:'MTc0NDg5NjYzNS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
