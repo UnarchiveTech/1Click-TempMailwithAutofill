@@ -1,7 +1,7 @@
 const API_BASE_URL = 'https://burner.kiwi/api/v2';
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('OneClickAutofill with TempMail extension installed');
+  console.log('1Click: Temp Mail with Autofill extension installed');
   initializeAnalytics();
   setupPeriodicEmailCheck();
   setupInboxExpiryCheck();
@@ -146,72 +146,100 @@ async function createInbox() {
   }
 }
 
-// Function to extract OTP from email content
+// Function to extract OTP from email content based on a prioritized set of rules.
 function extractOTP(subject, body) {
-  if (!subject && !body) {
-    console.log('No subject or body provided');
-    return null;
+  // Rule 7: Normalize Input
+  const normalizedSubject = subject ? subject.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '';
+
+  // For the body, we need a more careful normalization to preserve line breaks.
+  let normalizedBody = body || '';
+  if (normalizedBody) {
+      // First, remove style and script blocks completely to avoid CSS rules being mistaken for OTPs.
+      normalizedBody = normalizedBody.replace(/<(style|script)[\s\S]*?>[\s\S]*?<\/(style|script)>/gi, '');
+      // A more robust HTML-to-text conversion.
+      // 1. Replace block-level elements that create line breaks with a newline character.
+      normalizedBody = normalizedBody.replace(/<br\s*\/?>|<p.*?>|<div.*?>|<h[1-6].*?>/gi, '\n');
+      // 2. Strip all remaining HTML tags.
+      normalizedBody = normalizedBody.replace(/<[^>]+>/g, ' ');
+      // 3. Decode HTML entities like &nbsp;
+      normalizedBody = normalizedBody.replace(/&nbsp;/gi, ' ');
+      // 4. Consolidate whitespace and newlines for cleaner matching.
+      normalizedBody = normalizedBody.replace(/[ \t]+/g, ' ').trim(); // First, trim and consolidate horizontal spaces.
+      normalizedBody = normalizedBody.replace(/(\r\n|\r|\n){2,}/g, '\n'); // Then, consolidate newlines.
   }
 
-  let content = '';
-  if (subject) {
-    content += subject + ' ';
+  // For debugging, as requested by the user.
+  console.log("--- OTP Extraction Debug ---");
+  console.log("Original Body:", body);
+  console.log("Normalized Body:", normalizedBody);
+  console.log("--------------------------");
+
+  // Rule 4: Check Subject Line Separately
+  let otp = findOtpInText(normalizedSubject, true);
+  if (otp) {
+    console.log('OTP found in subject:', otp);
+    return otp;
   }
-  if (body) {
-    content += body;
+
+  // If not in subject, check body
+  otp = findOtpInText(normalizedBody, false);
+  if (otp) {
+    console.log('OTP found in body:', otp);
+    return otp;
   }
-
-  console.log('Checking content for OTP:', content.substring(0, 100) + '...');
-
-  const normalizedContent = content
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return extractOTPFromText(normalizedContent);
+  
+  console.log('No OTP found matching the specified rules.');
+  return null;
 }
 
-// Helper function to extract OTP from text
-function extractOTPFromText(content) {
+function findOtpInText(text, isSubject) {
+  if (!text) return null;
+  
+  const lowerCaseText = text.toLowerCase();
+  
+  // Rule 2 & 1: Define patterns with contextual keywords and OTP length.
+  // Patterns are ordered by confidence to implement Rule 6 (Position/Priority).
   const patterns = [
-    /(?:OTP|one[- ]?time[- ]?(?:password|code|pin)|verification[- ]?code|security[- ]?code|auth(?:entication)?[- ]?code)[^0-9]*?([0-9]{4,8})/i,
-    /your(?:\s+[a-z]+)*\s+(?:code|OTP|pin)\s+(?:is|:)\s*([0-9]{4,8})/i,
-    /(?:use|enter|verify with|code)[^0-9]*?([0-9]{3,4}[- ]?[0-9]{3,4})/i,
-    /\b(?:code|pin|otp)\s*[:=]\s*([0-9]{4,8})\b/i,
-    /\b([0-9]{4,8})\b(?=(?:[^0-9]|$).*?(?:valid|expires|verify|authentication|code|otp))/i,
-    /\b([0-9]{3}[- ][0-9]{3}|[0-9]{4}[- ][0-9]{4}|[0-9]{4}[- ][0-9]{3})\b/,
-    /\b([0-9]{4,8})\b(?![0-9])/
+      // 1. VERY HIGH confidence: An alphanumeric code (that isn't just letters) on its own line.
+      /^\s*(?![a-zA-Z]{4,8}$)([a-zA-Z0-9]{4,8})\s*$/m,
+
+      // 2. High confidence: keyword, colon, then code.
+      /(?:code|otp|pin|password|verification)[\s\S]{0,75}:\s*\b(?![a-zA-Z]{4,8}\b)([a-zA-Z0-9]{4,8})\b/i,
+
+      // 3. High confidence: keyword, "is" or "below", then code.
+      /(?:your|this|the)?\s*(?:code|otp|pin|password|verification)\s*(?:is|below)[\s\S]{0,50}\b(?![a-zA-Z]{4,8}\b)([a-zA-Z0-9]{4,8})\b/i,
+
+      // 4. Fallback: a numeric code near a keyword.
+      /(?:one\s*time\s*password|verification\s*code|otp|code|pin)[\s\S]{0,50}\b(\d{3,8})\b/i,
   ];
 
+  // For subjects, a standalone code is more likely an OTP.
+  if (isSubject) {
+      patterns.push(/\b(?![a-zA-Z]{3,8}\b)([a-zA-Z0-9]{3,8})\b/);
+  }
+
   for (const pattern of patterns) {
-    const matches = content.match(pattern);
-    if (matches && matches[1]) {
-      const otp = matches[1].replace(/[- ]/g, '');
-      if (/^[0-9]{4,8}$/.test(otp)) {
-        console.log('Valid OTP found:', otp);
-        return otp;
+    const match = text.match(pattern);
+    // The captured group is at index 1 or 2 depending on the regex.
+    const capturedOtp = match ? (match[1] || match[2]) : null;
+    if (capturedOtp) {
+      const potentialOtp = capturedOtp.replace(/[- ]/g, '');
+      // Rule 5: Further rejection of false positives.
+      if (potentialOtp.length >= 3 && potentialOtp.length <= 8) {
+        return potentialOtp;
       }
     }
   }
 
-  const numbers = content.match(/\b\d{4,8}\b/g) || [];
-  for (const num of numbers) {
-    const context = content.substring(
-      Math.max(0, content.indexOf(num) - 50),
-      Math.min(content.length, content.indexOf(num) + 50)
-    ).toLowerCase();
-
-    if (context.includes('otp') || 
-        context.includes('code') || 
-        context.includes('pin') || 
-        context.includes('verify') || 
-        context.includes('authentication')) {
-      console.log('OTP found in context:', num);
-      return num;
-    }
+  // Broader search if expiration language is present.
+  const hasExpirationLanguage = /(valid for|expires in|expire)/.test(lowerCaseText);
+  if (hasExpirationLanguage) {
+      const match = text.match(/\b(?![a-zA-Z]{3,8}\b)([a-zA-Z0-9]{3,8})\b/);
+      if (match && match[0]) {
+          return match[0];
+      }
   }
 
-  console.log('No OTP found in content');
   return null;
 }
 
@@ -242,10 +270,41 @@ async function checkNewEmails(inboxId, filters = {}) {
     let messages = data.result || [];
     console.log(`Fetched ${messages.length} messages`);
 
+    // Process messages for OTP
+    let otpCount = 0;
+    messages = messages.map(msg => {
+      // Use the HTML body if available, as it often has better structure for parsing.
+      const otp = extractOTP(msg.subject || '', msg.body_html || msg.body_plain || '');
+      if (otp) otpCount++;
+      return {
+        ...msg,
+        otp,
+      };
+    });
+
     // Check for new messages by comparing with stored messages
     const { lastMessageTimestamps = {} } = await chrome.storage.local.get(['lastMessageTimestamps']);
     const lastTimestamp = lastMessageTimestamps[inboxId] || 0;
     const newMessages = messages.filter(msg => msg.received_at * 1000 > lastTimestamp);
+
+    // Send OTP from new messages to the active tab
+    if (newMessages.length > 0) {
+      const latestNewMessageWithOtp = newMessages
+        .filter(msg => msg.otp)
+        .sort((a, b) => b.received_at - a.received_at)[0];
+      
+      if (latestNewMessageWithOtp) {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs.length > 0 && tabs[0].id) {
+            console.log(`Sending OTP ${latestNewMessageWithOtp.otp} to tab ${tabs[0].id}`);
+            chrome.tabs.sendMessage(tabs[0].id, { 
+              type: 'fillOTP', 
+              otp: latestNewMessageWithOtp.otp 
+            });
+          }
+        });
+      }
+    }
 
     // Update last message timestamp
     if (messages.length > 0) {
@@ -287,17 +346,6 @@ async function checkNewEmails(inboxId, filters = {}) {
       });
       console.log(`After search filter: ${messages.length} messages`);
     }
-
-    // Process messages for OTP and apply OTP filter
-    let otpCount = 0;
-    messages = messages.map(msg => {
-      const otp = extractOTP(msg.subject || '', msg.body_plain || '');
-      if (otp) otpCount++;
-      return {
-        ...msg,
-        otp
-      };
-    });
 
     // Update OTP analytics
     analytics.otpsDetected = (analytics.otpsDetected || 0) + otpCount;
@@ -402,4 +450,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.warn('Unknown message type:', message.type);
   sendResponse({ success: false, error: 'Unknown message type' });
   return false;
+});
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === 'autofill-form') {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab && tab.id) {
+        chrome.tabs.sendMessage(tab.id, { 
+          action: 'startSignup'
+        });
+      }
+    } catch (error) {
+      console.error('Error handling command:', error);
+    }
+  }
 });

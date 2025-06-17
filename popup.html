@@ -3,35 +3,38 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>1Click Autofill with TempMail</title>
+  <title>1Click: Temp Mail with Autofill</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="header">
-    <h2>1Click Autofill with TempMail</h2>
+    <h2>1Click: Temp Mail with Autofill</h2>
   </div>
   <div class="container">
 
 
     <div id="inboxContainer" class="inbox-container">
-      <div class="horizontal-section">
+      <div class="action-zone">
         <div class="inbox-dropdown-container">
           <div id="inboxDropdown" class="inbox-dropdown">
             <div class="dropdown-selected">Select an inbox</div>
             <ul class="dropdown-list"></ul>
           </div>
+        </div>
+        <div class="action-buttons">
           <button id="copyEmailButton" class="icon-button" title="Copy Email">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
               <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
             </svg>
           </button>
+          <button id="addInboxButton" class="icon-button" title="Create New Inbox">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12h14"></path>
+            </svg>
+          </button>
         </div>
-        <button id="addInboxButton" class="icon-button" title="Create New Inbox">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 5v14M5 12h14"></path>
-          </svg>
-        </button>
+        <button id="startSignup" class="autofill-button">Autofill Form</button>
       </div>
     </div>
 
@@ -67,20 +70,21 @@
       <div id="messagesList"></div>
     </div>
     <div class="otp-container" id="latestOtpContainer">
-      <h3>Latest OTP</h3>
-      <div class="otp-header">
-        <div class="otp-display">
-          <span id="latestOtpCode">------</span>
-          <button id="copyOtpButton" class="icon-button">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-            </svg>
-          </button>
-        </div>
+      <div class="otp-row">
+        <span class="otp-label">Latest OTP:</span>
+        <span id="latestOtpCode">------</span>
+        <button id="copyOtpButton" class="icon-button" title="Copy OTP">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+          </svg>
+          <svg class="check-icon" style="display: none;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6L9 17l-5-5"/>
+          </svg>
+        </button>
       </div>
+      <div class="otp-row-context" id="otpContext"></div>
     </div>
-    <button id="startSignup">Autofill Details</button>
 
 
     <div class="history-section">
@@ -104,12 +108,67 @@
       <div id="analyticsDashboard" class="analytics-dashboard"></div>
     </div>
 
+    <div class="settings-section">
+      <div class="settings-header">
+        <h3 class="settings-title">Settings</h3>
+      </div>
+      <div class="setting-item">
+        <label for="useCustomPasswordToggle">Use Custom Password</label>
+        <label class="switch">
+          <input type="checkbox" id="useCustomPasswordToggle">
+          <span class="slider round"></span>
+        </label>
+      </div>
+      <div class="setting-item password-input-container" id="customPasswordContainer">
+        <label for="customPasswordInput">Custom Password</label>
+        <input type="password" id="customPasswordInput" class="custom-password-input" placeholder="Enter your password">
+      </div>
+      <div class="setting-item">
+        <label for="useCustomNameToggle">Use Custom Name</label>
+        <label class="switch">
+          <input type="checkbox" id="useCustomNameToggle">
+          <span class="slider round"></span>
+        </label>
+      </div>
+      <div class="setting-item name-input-container" id="customNameContainer">
+        <div class="name-input-row">
+          <label for="customFirstNameInput">First Name</label>
+          <input type="text" id="customFirstNameInput" class="custom-name-input" placeholder="e.g., John">
+        </div>
+        <div class="name-input-row">
+          <label for="customLastNameInput">Last Name</label>
+          <input type="text" id="customLastNameInput" class="custom-name-input" placeholder="e.g., Doe">
+        </div>
+      </div>
+      <div class="setting-item">
+        <label>Data Management</label>
+        <div class="about-buttons">
+          <button id="exportData" class="icon-button" title="Export Data">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m14-7l-5 5-5-5m5 5V3"></path>
+            </svg>
+          </button>
+          <button id="importData" class="icon-button" title="Import Data">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5-5 5 5m-5-5v12"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="about-section">
-      <span class="version">v1.1.0</span>
+      <span class="version">v1.5.0</span>
       <div class="about-buttons">
         <button id="themeToggle" class="icon-button" title="Toggle Theme">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+          </svg>
+        </button>
+        <button id="settingsButton" class="icon-button" title="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"></path>
           </svg>
         </button>
         <button id="historyButton" class="icon-button" title="Email History">
@@ -124,22 +183,12 @@
         </button>
         <button id="analyticsButton" class="icon-button" title="Analytics Dashboard">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 3v18h18M7 16v-6m4 8v-8m4 6v-3m4 3v-6"/>
-          </svg>
-        </button>
-        <button id="exportData" class="icon-button" title="Export Data">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m14-7l-5 5-5-5m5 5V3"/>
-          </svg>
-        </button>
-        <button id="importData" class="icon-button" title="Import Data">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5-5 5 5m-5-5v12"/>
+            <path d="M3 3v18h18M7 16v-6m4 8v-8m4 6v-3m4 3v-6"></path>
           </svg>
         </button>
         <button id="reportIssue" class="icon-button" title="Report Issue">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
         </button>
       </div>

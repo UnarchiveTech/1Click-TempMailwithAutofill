@@ -1,134 +1,85 @@
-# 1Click Autofill with Temp Mail
+# 1Click: Temp Mail with Autofill
 
-A powerful Chrome extension designed to simplify online signups by generating disposable email addresses and managing one-time password (OTP) codes. Powered by the burner.kiwi API, this extension automates form filling, captures OTPs, and provides a seamless user experience with a modern, customizable interface.
+A powerful Chrome extension designed to streamline your online registration process. This tool automatically generates temporary email addresses, autofills signup forms, and intelligently extracts OTPs, making signups fast, secure, and private.
 
-## Features
+![Extension Popup UI](main-screenshot.png) <!-- Suggestion: Add a screenshot of the main UI -->
+
+## Key Features
 
 - **Disposable Email Generation**: Instantly creates temporary email addresses for signup forms.
-- **Automatic Form Filling**: Auto-populates signup forms with generated email addresses.
-- **OTP Management**: Extracts and displays OTP codes from verification emails in real-time.
-- **Email History**: Tracks previously used temporary email addresses for easy reference.
-- **Modern UI with Theme Support**: Offers dark and light modes.
-- **One-Click Copy**: Quickly copy email addresses and OTP codes with a single click.
-- **Real-Time Updates**: Automatically refreshes messages and inbox for up-to-date information.
+- **Automatic Form Filling**: Auto-populates signup forms with a single click.
+- **OTP Management**: Intelligently detects and extracts OTPs from emails.
+- **Customizable Autofill**: Set a custom name (first/last) and password for personalized form filling.
+- **Keyboard Shortcut**: Trigger autofill instantly with a configurable hotkey (`Alt+Shift+F` by default).
+- **Email History & Saved Logins**: Tracks all generated emails and credentials securely.
+- **Modern UI with Theme Support**: Offers a clean interface with both light and dark modes.
+- **Data Management**: Export and import your extension data easily.
+- **One-Click Copy**: Quickly copy emails, passwords, and OTPs.
 
-## Prerequisites
+## How It Works
 
-- Google Chrome browser (latest stable version recommended).
-- Internet connection for burner.kiwi API access.
-- Developer mode enabled in Chrome for installing unpacked extensions.
+1.  **Generate Email**: The extension provides a temporary email address upon opening.
+2.  **Autofill Form**: Navigate to a signup page and use the **"Autofill Form"** button (or the `Alt+Shift+F` hotkey) to instantly fill in the email, a secure password, and your name.
+3.  **Receive OTP**: When the verification email arrives, the extension automatically detects the OTP.
+4.  **Complete Signup**: The OTP is sent to the content script, which fills it into the verification field, completing the signup.
+
+### Fine-Grained Control
+
+- **Individual Field Filling**: Don't want to fill the whole form? Helper icons appear next to individual fields, allowing you to fill just the email, name, or password.
+- **Custom Settings**:
+    - Supports both **Dark and Light Mode**.
+    - Toggle desktop notifications for new emails.
 
 ## Installation
 
-1. Clone or download this repository to your local machine:
+1.  **Download the code:**
+    -   Clone this repository: `git clone https://github.com/UnarchiveTech/1Click-TempMailwithAutofill.git`
+    -   Or, download the ZIP and extract it.
+2.  **Open Chrome Extensions:** Navigate to `chrome://extensions/` in your Chrome browser.
+3.  **Enable Developer Mode:** Turn on the "Developer mode" toggle, usually in the top-right corner.
+4.  **Load the Extension:**
+    -   Click the **"Load unpacked"** button.
+    -   Select the directory where you cloned or extracted the code.
+5.  The **1Click** icon will now appear in your toolbar. Pin it for easy access!
 
-   ```bash
-   git clone https://github.com/EveryWebStuffs/1Click-Autofill-with-Temp-Mail.git
-   ```
+## Usage Guide
 
-2. Open Chrome and navigate to `chrome://extensions/`.
-
-3. Enable **Developer mode** in the top-right corner.
-
-4. Click **Load unpacked** and select the extension’s directory.
-
-5. The **1Click Autofill with Temp Mail** icon will appear in your Chrome toolbar.
-
-## Usage
-
-1. Click the extension icon to open the popup interface.
-2. A temporary email address is automatically generated via the burner.kiwi API.
-3. Click **Start Auto Signup** to enable automatic form filling.
-4. The extension will populate signup forms with the temporary email address.
-5. When a verification email arrives, the OTP code is extracted and displayed in the **Latest OTP Code** section.
-6. Use the copy button to paste the OTP code into the required field.
-7. Access **Email History** or **Messages** sections to review past emails and messages.
-
-## Features in Detail
-
-### Temporary Email Management
-
-- Generates disposable email addresses using the burner.kiwi API.
-- Allows refreshing of email addresses for new inboxes.
-- Maintains a history of used email addresses for easy access.
-
-### Message Center
-
-- Monitors incoming messages in real-time via the burner.kiwi API.
-- Extracts OTP codes from email subjects and bodies using intelligent pattern matching.
-- Displays a message list with a detailed view for each email.
-
-### User Interface
-
-- Clean, responsive popup interface.
-- Supports dark and light themes
-- Smooth transitions and hover effects for an engaging user experience.
+1.  **Create an Inbox:** The extension creates a new temporary email for you automatically. You can create more using the `+` button in the popup.
+2.  **Autofill a Signup Form:**
+    -   Navigate to any website's registration page.
+    -   Click the **"Autofill Details"** button in the extension popup to fill all detected fields.
+    -   Alternatively, click the small icon next to any individual field to fill just that one.
+3.  **Automatic OTP Handling:**
+    -   After you submit the form, the extension will monitor the inbox for a new email.
+    -   When an OTP email arrives, the extension will extract the code and automatically fill it on the verification page.
+4.  **Using a Custom Password:**
+    -   Click the **Settings** (gear) icon in the popup.
+    -   Enable the **"Use Custom Password"** toggle.
+    -   Enter the password you wish to use. The extension will now use this password for autofilling.
+5.  **Accessing Saved Information:**
+    -   Click the **History** (clock) icon to see a list of past inboxes you've created.
+    -   Click the **Login Info** (key) icon to see the credentials you've saved for different websites.
 
 ## File Structure
 
-- `background.js`: Manages background processes and API communication.
-- `content.js`: Handles form auto-filling on web pages.
-- `data-manager.js`: Stores and retrieves temporary emails and OTP codes.
-- `history.js`: Logic for displaying and managing email history.
-- `icons/`: Contains icon assets:
-  - `autofill.svg`: Auto-fill functionality icon.
-  - `history.svg`: Email history view icon.
-  - `icon*.png`: Extension icons in various sizes.
-  - `refresh.svg`: Refresh button icon.
-- `manifest.json`: Defines extension permissions and structure.
-- `popup.html`: Main popup interface HTML.
-- `popup.js`: Handles popup UI logic and user interactions.
-- `styles.css`: Styles the extension with a modern, theme-aware design.
-
-## API Integration
-
-### burner.kiwi API
-
-The extension leverages the burner.kiwi API v2 for temporary email functionality:
-
-- **Inbox Creation**: Generates disposable inboxes via `https://burner.kiwi/api/v2/inbox`.
-- **Message Retrieval**: Fetches messages using `https://burner.kiwi/api/v2/inbox/{id}/messages`.
-- **Authentication**: Uses secure tokens for API access.
-
-### OTP Extraction
-
-- Employs advanced pattern matching to identify OTP codes (4-8 digits, with/without separators).
-- Analyzes email subjects and bodies to support various OTP formats.
-- Ensures reliable extraction across different email providers and message structures.
-
-## Security
-
-- Uses temporary email addresses to protect your primary email’s privacy.
-- Stores no sensitive data permanently; all data is kept in local browser storage.
-- Communicates with the burner.kiwi API over secure HTTPS.
-- Email tokens are securely managed and stored locally.
-
-## Troubleshooting
-
-- **Extension not loading**: Ensure Developer mode is enabled and the extension is loaded from the correct directory.
-- **API errors**: Verify your internet connection and check if the burner.kiwi API is operational.
-- **OTP not detected**: Ensure the email format is supported; contact support if issues persist.
-- **Theme issues**: Clear browser cache or reload the extension to apply the latest `styles.css` changes.
+-   `background.js`: Core service worker. Manages API communication, state, and all OTP extraction logic.
+-   `content.js`: Injects autofill buttons and logic into web pages. Handles all direct interaction with the DOM.
+-   `popup.html` / `popup.js` / `styles.css`: The HTML, JavaScript, and CSS for the main extension popup UI.
+-   `manifest.json`: The extension's manifest file, defining permissions, scripts, and metadata.
+-   `icons/`: Contains all SVG and PNG icons used throughout the extension.
 
 ## Contributing
 
-We welcome contributions! To contribute:
+Contributions are welcome and appreciated! If you have an idea for a new feature or want to fix a bug, please follow these steps:
 
-1. Fork the repository.
-2. Create a feature branch (`git checkout -b feature/your-feature`).
-3. Commit your changes (`git commit -m "Add your feature"`).
-4. Push to the branch (`git push origin feature/your-feature`).
-5. Open a Pull Request.
+1.  Fork the repository.
+2.  Create your feature branch (`git checkout -b feature/your-feature`).
+3.  Commit your changes (`git commit -m 'Add your feature'`).
+4.  Push to the branch (`git push origin feature/your-feature`).
+5.  Open a Pull Request.
 
-Please ensure your code follows the project’s coding style and includes relevant tests.
-
-## Future Enhancements
-
-- Support for additional temporary email providers.
-- Enhanced OTP detection for non-standard formats.
-- Customizable theme colors via a settings panel.
-- Browser extension support for Firefox and Edge.
+Alternatively, you can open an issue to report a bug or suggest an enhancement.
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the MIT License. See the `LICENSE` file for details.

@@ -1,4 +1,4 @@
-/* Main Styles for 1ClickAutofill with TempMail */
+/* Main Styles for 1Click: Temp Mail with Autofill */
 
 /* Auto-fill Button Styles */
 .autofill-button-container {
@@ -101,10 +101,10 @@ body {
   padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
   width: 350px;
   box-sizing: border-box;
   margin: 0 auto;
+  gap: 8px;
 }
 
 /* Horizontal Section Layout */
@@ -192,6 +192,26 @@ body {
   transition: background-color 0.2s, transform 0.1s;
   word-break: break-all;
   position: relative;
+}
+
+.inbox-item-details {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.inbox-address {
+  font-weight: 500;
+  color: var(--primary-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inbox-expiry {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .dropdown-list li:hover {
@@ -379,107 +399,49 @@ body.dark-mode .icon-button svg {
 /* OTP Container Styles */
 .otp-container {
   background-color: var(--otp-bg);
+  padding: 10px 15px;
   border-radius: 8px;
-  padding: 0px 10px;
+  margin-top: 15px;
   border: 1px solid var(--otp-border);
-  transition: all 0.3s;
-  box-sizing: border-box;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  display: none; /* Hidden by default */
+}
+
+.otp-row {
   display: flex;
-  align-items: center;
-  justify-content: initial;
-  flex-direction: row;
-  gap: 8px;
-}
-
-.otp-container button {
-  margin-top: 6px;
-}
-
-.otp-container .otp-code {
-  font-family: monospace;
-  font-size: 15px;
-  color: var(--otp-text);
-  text-align: center;
-  margin: 6px 0;
-  letter-spacing: 1.5px;
-}
-
-.otp-container .otp-timer {
-  font-size: 13px;
-  color: var(--text-secondary);
-  text-align: center;
-  margin-top: 6px;
-}
-
-.otp-header {
-  display: contents;
   justify-content: flex-start;
   align-items: center;
-  margin-bottom: 0;
-  margin-right: 8px;
-  flex-direction: column
+  gap: 5px;
 }
 
-.otp-title {
-  font-weight: 500;
+.otp-label {
+  font-size: 14px;
+  font-weight: 600;
   color: var(--otp-text);
-  margin: 0;
-  font-size: 12px;
   white-space: nowrap;
 }
 
-.otp-display {
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 15px;
-  font-weight: 700;
+#latestOtpCode {
+  font-size: 20px;
+  font-weight: bold;
   letter-spacing: 2px;
-  text-align: center;
+  font-family: 'Courier New', Courier, monospace;
   color: var(--otp-text);
-  display: flex;
-  align-items: center;
-  justify-content: initial;
+  flex-grow: 0;
+  text-align: left;
+  margin: 0 5px;
 }
 
-.otp-display button {
-  background-color: transparent;
-  color: var(--primary-color);
-  border: none;
-  padding: 4px 8px;
-  border-radius: 4px;
+.otp-row-context {
   font-size: 12px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  transition: background-color 0.2s;
+  color: var(--otp-text);
+  opacity: 0.8;
+  text-align: left;
+  margin-top: 4px;
 }
 
-.otp-display button:hover {
-  background-color: rgba(66, 133, 244, 0.1);
-}
-
-body.dark-mode .otp-container {
-  background-color: var(--dark-otp-bg);
-  border-color: var(--dark-otp-border);
-}
-
-body.dark-mode .otp-title,
-body.dark-mode .otp-display {
-  color: var(--dark-otp-text);
-}
-
-body.dark-mode .otp-display {
-  background-color: var(--dark-bg-secondary);
-}
-
-body.dark-mode .otp-display button {
-  color: var(--dark-primary-color);
-}
-
-body.dark-mode .otp-display button:hover {
-  background-color: rgba(138, 180, 248, 0.2);
+.otp-row .icon-button svg {
+  width: 20px;
+  height: 20px;
 }
 
 /* Messages Container Styles */
@@ -674,6 +636,13 @@ body.dark-mode .back-button svg {
 /* History Section Styles */
 .history-section {
   display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-color);
+  padding: 20px;
   background-color: var(--bg-secondary);
   border-radius: 8px;
   padding: 8px;
@@ -759,6 +728,13 @@ body.dark-mode .back-button svg {
 /* Login Info Section Styles */
 .login-info-section {
   display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-color);
+  padding: 20px;
   background-color: var(--bg-secondary);
   border-radius: 8px;
   padding: 8px;
@@ -890,6 +866,13 @@ body.dark-mode .login-info-copy:hover {
 /* Analytics Section Styles */
 .analytics-section {
   display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-color);
+  padding: 20px;
   background-color: var(--bg-secondary);
   border-radius: 8px;
   padding: 8px;
@@ -923,9 +906,9 @@ body.dark-mode .login-info-copy:hover {
 }
 
 .analytics-dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
 }
 
 .analytics-item {
@@ -1269,4 +1252,310 @@ body.dark-mode .notification-icon:hover {
 body.dark-mode .toast.expiry {
   background-color: var(--dark-accent-color);
   color: var(--dark-text-primary);
+}
+
+body.dark-mode .inbox-address {
+  color: var(--dark-primary-color);
+}
+
+body.dark-mode .inbox-expiry {
+  color: var(--dark-text-secondary);
+}
+
+.settings-section {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-color);
+  padding: 20px;
+  z-index: 100;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color);
+  overflow-y: auto;
+}
+
+.dark-mode .settings-section {
+  background-color: var(--dark-bg-secondary);
+  border-color: var(--dark-border-color);
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color-light);
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+.settings-title {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-color);
+}
+
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--border-color-light);
+}
+
+.setting-item.password-input-container {
+  display: none; /* Hidden by default */
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.setting-item.password-input-container.visible {
+  display: flex; /* Shown when toggle is on */
+}
+
+.setting-item.name-input-container {
+  display: none; /* Hidden by default */
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding-left: 15px;
+  padding-right: 15px;
+  box-sizing: border-box;
+}
+
+.setting-item.name-input-container.visible {
+  display: flex; /* Shown when toggle is on */
+}
+
+.name-input-row {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 6px;
+}
+
+.custom-name-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--input-bg);
+  color: var(--text-color);
+}
+
+.setting-item:last-child {
+  border-bottom: none;
+}
+
+.setting-item label {
+  color: var(--text-color);
+  font-size: 14px;
+}
+
+.dark-mode .setting-item label {
+  color: var(--dark-text-color);
+}
+
+.custom-password-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--input-bg);
+  color: var(--text-color);
+}
+
+.custom-password-input:disabled {
+  background-color: var(--disabled-bg);
+  cursor: not-allowed;
+}
+
+/* Switch toggle styles */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border-color);
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: var(--primary-color);
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px var(--primary-color);
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+.slider.round {
+  border-radius: 24px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+/* Dark Mode OTP Styles */
+body.dark-mode .otp-container {
+  background-color: var(--dark-otp-bg);
+  border-color: var(--dark-otp-border);
+}
+
+body.dark-mode .otp-label,
+body.dark-mode .otp-row-context,
+body.dark-mode #latestOtpCode {
+  color: var(--dark-otp-text);
+}
+
+.action-zone {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 0px;
+  padding: 0px;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.inbox-dropdown-container {
+  grid-column: 1 / 2;
+  grid-row: 1 / 2;
+  display: flex;
+}
+
+.action-buttons {
+  grid-column: 2 / 3;
+  grid-row: 1 / 2;
+  display: flex;
+  gap: 5px;
+}
+
+#startSignup {
+  grid-column: 1 / 3;
+  grid-row: 2 / 3;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+#startSignup:hover {
+  background-color: var(--primary-hover);
+}
+
+.dark-mode .action-zone {
+  background-color: var(--dark-bg-secondary);
+}
+
+.dark-mode #startSignup {
+  background-color: var(--dark-primary-color);
+}
+
+.dark-mode #startSignup:hover {
+  background-color: var(--dark-primary-hover);
+}
+
+.messages-container {
+  position: relative;
+}
+
+/* History Section */
+.history-section,
+.login-info-section, .analytics-section {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-color);
+  padding: 20px;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+.history-section.fullscreen {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  overflow-y: auto;
+  border-radius: 0;
+  padding: 16px;
+}
+
+.login-info-section.fullscreen {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  overflow-y: auto;
+  border-radius: 0;
+  padding: 16px;
+}
+
+.analytics-section.fullscreen {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  overflow-y: auto;
+  border-radius: 0;
+  padding: 16px;
 }
