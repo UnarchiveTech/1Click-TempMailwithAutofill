@@ -675,6 +675,41 @@ function generateWebsiteUrl() {
   return `https://www.${name}.${domain}`;
 }
 
+/**
+ * Builds a multi-line string of the generated credentials for clipboard copying.
+ * @param {object} credentials - An object containing the generated data.
+ * @param {string} credentials.email - The generated email address.
+ * @param {string} credentials.password - The generated password.
+ * @param {string|null} credentials.username - The generated username, or null if not applicable.
+ * @param {string|null} credentials.fullName - The generated full name, or null if not applicable.
+ * @param {string|null} credentials.phone - The generated phone number, or null if not applicable.
+ * @returns {string} A formatted string ready for the clipboard.
+ */
+function buildCredentialsString(credentials) {
+  const { email, password, username, fullName, phone } = credentials;
+
+  const credentialLines = [
+    `Website: ${window.location.hostname}`,
+    `Email: ${email}`,
+    `Password: ${password}`,
+    username ? `Username: ${username}` : null,
+    fullName ? `Name: ${fullName}` : null,
+    phone ? `Phone: ${phone}` : null,
+  ];
+
+  // The .filter(Boolean) trick cleanly removes any null or empty lines.
+  return credentialLines.filter(Boolean).join('\n');
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    // console.log('Credentials copied to clipboard.');
+  } catch (err) {
+    console.error('Failed to copy credentials to clipboard:', err);
+  }
+}
+
 async function fillSignupForm(form) {
   try {
     const { activeInboxId, inboxes = [] } = await chrome.storage.local.get(['activeInboxId', 'inboxes']);
@@ -683,7 +718,6 @@ async function fillSignupForm(form) {
       throw new Error('No active inbox found');
     }
 
-    const randomUsername = generateUsername();
     const names = await getNamesToFill();
     const { fullName, firstName, lastName } = names;
 
@@ -733,13 +767,17 @@ async function fillSignupForm(form) {
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
 
+    const emailAddress = inbox.address;
+    const password = await getPasswordToFill();
+    const randomUsername = usernameInput ? generateUsername() : null;
+    const randomPhone = phoneInput ? generatePhoneNumber() : null;
+    const fullNameToUse = nameFilled ? fullName : null;
     if (emailInput) {
-      emailInput.value = inbox.address;
+      emailInput.value = emailAddress;
       emailInput.dispatchEvent(new Event('input', { bubbles: true }));
       emailInput.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    const randomPhone = generatePhoneNumber();
     if (phoneInput) {
       phoneInput.value = randomPhone;
       phoneInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -759,7 +797,6 @@ async function fillSignupForm(form) {
       websiteInput.dispatchEvent(new Event('change', { bubbles: true }));
     }
     
-    const password = await getPasswordToFill();
     const passwordInputs = form.querySelectorAll('input[type="password"], input[name*="password"], input[id*="password"]');
     
     passwordInputs.forEach(input => {
@@ -773,13 +810,26 @@ async function fillSignupForm(form) {
       termsCheckbox.click();
     }
 
+    const { autoCopy = false } = await chrome.storage.local.get('autoCopy');
+    if (autoCopy) {
+      const credentials = {
+        email: emailAddress,
+        password: password,
+        username: randomUsername,
+        fullName: fullNameToUse,
+        phone: randomPhone,
+      };
+      const credentialsString = buildCredentialsString(credentials);
+      await copyToClipboard(credentialsString);
+    }
+
     const { credentialsHistory = [] } = await chrome.storage.local.get(['credentialsHistory']);
     
     const newCredential = { 
-      email: inbox.address,
-      username: usernameInput ? randomUsername : null,
-      name: nameFilled ? fullName : null,
-      phone: phoneInput ? randomPhone : null,
+      email: emailAddress,
+      username: randomUsername,
+      name: fullNameToUse,
+      phone: randomPhone,
       website: websiteInput ? randomWebsite : null,
       password: password,
       domain: window.location.hostname,
