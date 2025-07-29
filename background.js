@@ -377,6 +377,90 @@ async function deleteInbox(inboxId) {
   }
 }
 
+// Main handler for updating session credentials and auto-copying to clipboard
+async function handleUpdateSessionCredentials(message, sender) {
+  // Ensure the message comes from a valid tab (security check)
+  if (!sender.tab || !sender.tab.id) {
+    throw new Error('Credentials can only be updated from a valid browser tab');
+  }
+
+  // Retrieve existing session credentials to merge with new data
+  // This allows partial updates without losing existing fields
+  const { sessionCredentials = {} } = await chrome.storage.session.get('sessionCredentials');
+
+  const { autoCopy = false } = await chrome.storage.local.get('autoCopy');
+
+  // Merge existing credentials with new ones (new values override existing)
+  const updatedCredentials = { ...sessionCredentials, ...message.credentials };
+
+  // Save the merged credentials back to session storage
+  await chrome.storage.session.set({ sessionCredentials: updatedCredentials });
+
+  // Only copy to clipboard if the user has enabled auto-copy feature
+  // This respects user preferences and avoids unwanted clipboard modifications
+  if (autoCopy) {
+    const clipboardText = buildCredentialsStringForSession(updatedCredentials);
+    await writeToClipboard(sender.tab.id, clipboardText);
+  }
+
+  return { success: true };
+}
+
+// Helper function to format credentials into a user-friendly clipboard format
+// We maintain a specific order to ensure consistency across all credential entries
+function buildCredentialsStringForSession(credentials) {
+  // Define the order we want fields to appear - website first for context,
+  // then the most commonly needed fields (email/username, password)
+  const fieldOrder = ['website', 'email', 'username', 'password', 'name', 'phone'];
+
+  const fieldLabels = {
+    website: 'Website',
+    email: 'Email',
+    username: 'Username',
+    password: 'Password',
+    name: 'Name',
+    phone: 'Phone'
+  };
+
+  const formattedFields = fieldOrder.map(fieldKey => {
+    const fieldValue = credentials[fieldKey];
+
+    // Skip fields that are empty, null, or undefined
+    if (!fieldValue) {
+      return null;
+    }
+
+    // Create the formatted line: "Website: example.com"
+    const fieldLabel = fieldLabels[fieldKey];
+    return `${fieldLabel}: ${fieldValue}`;
+  });
+
+  // Remove any null entries (fields that had no values)
+  const validFields = formattedFields.filter(Boolean);
+
+  return validFields.join('\n');
+}
+
+// Helper function to safely copy text to clipboard in the active tab
+// We use content script injection because clipboard access requires user interaction context
+async function writeToClipboard(tabId, text) {
+  if (!text) return;
+
+  try {
+    // Inject a function into the active tab to access its clipboard API
+    // This is necessary because background scripts can't directly access clipboard
+    await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      func: (textToCopy) => navigator.clipboard.writeText(textToCopy),
+      args: [text]
+    });
+  } catch (error) {
+    console.error('Failed to copy credentials to clipboard:', error);
+    // We don't throw here to prevent breaking the main flow
+    // The user will just miss the clipboard copy feature
+  }
+}
+
 // Handle messages from content scripts and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Received message:', message);
@@ -432,6 +516,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     return true;
   }
+  
+if (message.type === 'clearSessionCredentials') {
+  chrome.storage.session.remove('sessionCredentials')
+    .then(() => sendResponse({ success: true }))
+    .catch(error => {
+      console.error('Failed to clear session credentials:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+  return true;
+}
+
+if (message.type === 'updateSessionCredentials') {
+  handleUpdateSessionCredentials(message, sender)
+    .then(result => sendResponse(result))
+    .catch(error => {
+      console.error('Error updating session credentials:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+  return true;
+}
+
 
   if (message.type === 'getAnalytics') {
     chrome.storage.local.get(['analytics'])
