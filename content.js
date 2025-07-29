@@ -1,5 +1,23 @@
+// Clear any existing session credentials when the page loads/reloads
+// This ensures we start with a clean slate for each new page visit
+chrome.runtime
+  .sendMessage({ type: 'clearSessionCredentials' })
+  .catch(e => console.error('Could not send clear session message:', e));
+
 let autoFillButtonsInjected = false;
 let injectedButtons = [];
+
+// Sends a message to the background script to update session data and copy to clipboard.
+async function updateAndCopyCredentials(credentialsToUpdate) {
+    try {
+        await chrome.runtime.sendMessage({
+            type: 'updateSessionCredentials',
+            credentials: credentialsToUpdate
+        });
+    } catch (error) {
+        console.error('Error sending update credentials message:', error);
+    }
+}
 
 function findSignupForm() {
   const forms = Array.from(document.querySelectorAll('form'));
@@ -111,6 +129,9 @@ function injectAutoFillButtons(form) {
 
   const inputFields = form.querySelectorAll('input[type="text"], input[type="email"], input[type="password"], input[type="tel"], input[type="checkbox"], select, [name*="email"], [id*="email"], [name*="username"], [id*="username"], [name*="name"]:not([name*="username"]), [id*="name"]:not([id*="username"]), [name*="phone"], [id*="phone"], [name*="mobile"], [id*="mobile"]');
 
+  // Helper to make SVGs non-interactive to clicks, ensuring the button always gets the event.
+  const svgStyle = 'style="pointer-events: none;"';
+
   inputFields.forEach(inputField => {
     const isSelect = inputField.tagName.toLowerCase() === 'select';
     const isCheckbox = inputField.type === 'checkbox';
@@ -177,49 +198,49 @@ function injectAutoFillButtons(form) {
     let iconSvg;
     if (isEmail) {
       iconSvg = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <svg ${svgStyle} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
         </svg>
       `;
     } else if (isPassword) {
       iconSvg = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <svg ${svgStyle} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
         </svg>
       `;
     } else if (isPhone) {
       iconSvg = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <svg ${svgStyle} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/>
         </svg>
       `;
     } else if (isFirstName || isLastName || isFullName || isUsername) {
       iconSvg = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <svg ${svgStyle} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
         </svg>
       `;
     } else if (isSelect) {
       iconSvg = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <svg ${svgStyle} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M12.5,2.17L11.83,2.83L13.67,4.67L12,5.5L9.5,4L10.25,7H5.5L4,9.5L7,10.25L4,13.25L5.5,14H8.5L9,17L12,14.5L15,17L15.5,14H18.5L20,13.25L17,10.25L20,9.5L18.5,7H13.75L14.5,4L13,2.5L12.5,2.17M12,7.29L11,10L12,12.71L13,10L12,7.29Z" />
         </svg>
       `;
     } else if (isWebsite) {
       iconSvg = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <svg ${svgStyle} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
         </svg>
       `;
     } else if (isCheckbox) {
       iconSvg = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <svg ${svgStyle} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
         </svg>
       `;
     } else {
       iconSvg = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <svg ${svgStyle} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M12 2.5l-2.8 5.7-6.2.9 4.5 4.4-1.1 6.2L12 16.5l5.1 3.2-1.1-6.2 4.5-4.4-6.2-.9z"/>
         </svg>
       `;
@@ -284,6 +305,8 @@ function injectAutoFillButtons(form) {
       event.stopPropagation();
 
       try {
+        let credentialsToUpdate = {};
+
         if (isEmail) {
           const { activeInboxId, inboxes = [] } = await chrome.storage.local.get(['activeInboxId', 'inboxes']);
           const inbox = inboxes.find(i => i.id === activeInboxId);
@@ -291,18 +314,22 @@ function injectAutoFillButtons(form) {
             throw new Error('No active inbox found');
           }
           inputField.value = inbox.address;
+          credentialsToUpdate = { email: inbox.address };
           showTooltip(autoFillButton, 'Email filled', false);
         } else if (isPassword) {
           const password = await getPasswordToFill();
           inputField.value = password;
+          credentialsToUpdate = { password: password };
           showTooltip(autoFillButton, 'Password generated', false);
         } else if (isPhone) {
           const phone = generatePhoneNumber();
           inputField.value = phone;
+          credentialsToUpdate = { phone: phone };
           showTooltip(autoFillButton, 'Phone number generated', false);
         } else if (isUsername) {
           const username = generateUsername();
           inputField.value = username;
+          credentialsToUpdate = { username: username };
           showTooltip(autoFillButton, 'Username generated', false);
         } else if (isFirstName || isLastName || isFullName) {
           const names = await getNamesToFill();
@@ -320,6 +347,7 @@ function injectAutoFillButtons(form) {
             fieldType = 'Full Name';
           }
           inputField.value = nameToFill;
+          credentialsToUpdate = { name: names.fullName };
           showTooltip(autoFillButton, `${fieldType} filled`, false);
         } else if (isSelect) {
           fillSelectElement(inputField);
@@ -333,6 +361,7 @@ function injectAutoFillButtons(form) {
             website = generateWebsiteUrl();
           }
           inputField.value = website;
+          credentialsToUpdate = { website: website };
           showTooltip(autoFillButton, 'Website filled', false);
         } else if (isCheckbox) {
           inputField.checked = !inputField.checked;
@@ -340,11 +369,16 @@ function injectAutoFillButtons(form) {
         } else {
           const username = generateUsername();
           inputField.value = username;
+          credentialsToUpdate = { username: username };
           showTooltip(autoFillButton, 'Field filled', false);
         }
 
         inputField.dispatchEvent(new Event('input', { bubbles: true }));
         inputField.dispatchEvent(new Event('change', { bubbles: true }));
+
+        if (Object.keys(credentialsToUpdate).length > 0) {
+            await updateAndCopyCredentials(credentialsToUpdate);
+        }
 
       } catch (error) {
         console.error('Error filling field:', error);
@@ -537,7 +571,7 @@ function addFillAllButton(form) {
   };
 
   fillAllButton.innerHTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 4px;">
+    <svg style="pointer-events: none; margin-right: 4px;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
       <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 8h-3v3c0 .55-.45 1-1 1s-1-.45-1-1v-3H9c-.55 0-1-.45-1-1s.45-1 1-1h3V7c0-.55.45-1 1-1s1 .45 1 1v3h3c.55 0 1 .45 1 1s-.45 1-1 1z"/>
     </svg>
     Fill All
@@ -675,41 +709,6 @@ function generateWebsiteUrl() {
   return `https://www.${name}.${domain}`;
 }
 
-/**
- * Builds a multi-line string of the generated credentials for clipboard copying.
- * @param {object} credentials - An object containing the generated data.
- * @param {string} credentials.email - The generated email address.
- * @param {string} credentials.password - The generated password.
- * @param {string|null} credentials.username - The generated username, or null if not applicable.
- * @param {string|null} credentials.fullName - The generated full name, or null if not applicable.
- * @param {string|null} credentials.phone - The generated phone number, or null if not applicable.
- * @returns {string} A formatted string ready for the clipboard.
- */
-function buildCredentialsString(credentials) {
-  const { email, password, username, fullName, phone } = credentials;
-
-  const credentialLines = [
-    `Website: ${window.location.hostname}`,
-    `Email: ${email}`,
-    `Password: ${password}`,
-    username ? `Username: ${username}` : null,
-    fullName ? `Name: ${fullName}` : null,
-    phone ? `Phone: ${phone}` : null,
-  ];
-
-  // The .filter(Boolean) trick cleanly removes any null or empty lines.
-  return credentialLines.filter(Boolean).join('\n');
-}
-
-async function copyToClipboard(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    // console.log('Credentials copied to clipboard.');
-  } catch (err) {
-    console.error('Failed to copy credentials to clipboard:', err);
-  }
-}
-
 async function fillSignupForm(form) {
   try {
     const { activeInboxId, inboxes = [] } = await chrome.storage.local.get(['activeInboxId', 'inboxes']);
@@ -736,6 +735,27 @@ async function fillSignupForm(form) {
     const firstNameInput = form.querySelector('input[name*="firstname" i], input[id*="firstname" i], input[name*="fname" i], input[id*="fname" i], input[placeholder*="first name" i]');
     const lastNameInput = form.querySelector('input[name*="lastname" i], input[id*="lastname" i], input[name*="lname" i], input[id*="lname" i], input[placeholder*="last name" i]');
     const fullNameInput = form.querySelector('input[name*="fullname" i], input[id*="fullname" i], input[name*="name"]:not([name*="user"]):not([name*="first"]):not([name*="last"]), input[id*="name"]:not([id*="user"]):not([id*="first"]):not([name*="last"]), input[placeholder*="full name" i], input[placeholder*="name" i]:not([placeholder*="user"]):not([placeholder*="first"]):not([placeholder*="last"])');
+
+    const emailAddress = inbox.address;
+    const password = await getPasswordToFill();
+    const randomUsername = usernameInput ? generateUsername() : null;
+    const randomPhone = phoneInput ? generatePhoneNumber() : null;
+
+    let randomWebsite = null;
+    if (websiteInput) {
+      const placeholder = websiteInput.placeholder;
+      if (placeholder && (placeholder.startsWith('http') || placeholder.startsWith('www'))) {
+        randomWebsite = placeholder;
+      } else {
+        randomWebsite = generateWebsiteUrl();
+      }
+    }
+    
+    if (emailInput) {
+      emailInput.value = emailAddress;
+      emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+      emailInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
 
     if (usernameInput) {
       usernameInput.value = randomUsername;
@@ -767,31 +787,13 @@ async function fillSignupForm(form) {
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
 
-    const emailAddress = inbox.address;
-    const password = await getPasswordToFill();
-    const randomUsername = usernameInput ? generateUsername() : null;
-    const randomPhone = phoneInput ? generatePhoneNumber() : null;
-    const fullNameToUse = nameFilled ? fullName : null;
-    if (emailInput) {
-      emailInput.value = emailAddress;
-      emailInput.dispatchEvent(new Event('input', { bubbles: true }));
-      emailInput.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-
     if (phoneInput) {
       phoneInput.value = randomPhone;
       phoneInput.dispatchEvent(new Event('input', { bubbles: true }));
       phoneInput.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    let randomWebsite = null;
     if (websiteInput) {
-      const placeholder = websiteInput.placeholder;
-      if (placeholder && (placeholder.startsWith('http') || placeholder.startsWith('www'))) {
-        randomWebsite = placeholder;
-      } else {
-        randomWebsite = generateWebsiteUrl();
-      }
       websiteInput.value = randomWebsite;
       websiteInput.dispatchEvent(new Event('input', { bubbles: true }));
       websiteInput.dispatchEvent(new Event('change', { bubbles: true }));
@@ -810,25 +812,29 @@ async function fillSignupForm(form) {
       termsCheckbox.click();
     }
 
-    const { autoCopy = false } = await chrome.storage.local.get('autoCopy');
-    if (autoCopy) {
-      const credentials = {
-        email: emailAddress,
-        password: password,
-        username: randomUsername,
-        fullName: fullNameToUse,
-        phone: randomPhone,
-      };
-      const credentialsString = buildCredentialsString(credentials);
-      await copyToClipboard(credentialsString);
-    }
+    const credentials = {
+      website: randomWebsite || window.location.hostname,
+      email: emailAddress,
+      username: randomUsername,
+      password: password,
+      name: nameFilled ? fullName : null,
+      phone: randomPhone,
+    };
+    
+    // Filter out null values before sending
+    const finalCredentials = Object.fromEntries(
+        Object.entries(credentials).filter(([, v]) => v != null)
+    );
 
+    // Overwrite session data and copy all credentials to clipboard via background script
+    await updateAndCopyCredentials(finalCredentials);
+    
     const { credentialsHistory = [] } = await chrome.storage.local.get(['credentialsHistory']);
     
     const newCredential = { 
       email: emailAddress,
       username: randomUsername,
-      name: fullNameToUse,
+      name: nameFilled ? fullName : null,
       phone: randomPhone,
       website: websiteInput ? randomWebsite : null,
       password: password,
