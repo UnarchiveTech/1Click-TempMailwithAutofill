@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const customNameContainer = document.getElementById('customNameContainer');
   const customFirstNameInput = document.getElementById('customFirstNameInput');
   const customLastNameInput = document.getElementById('customLastNameInput');
+  const autoCopyToggle = document.getElementById('autoCopyToggle');
   let loginInfoViewActive = false;
   let analyticsViewActive = false;
   let settingsViewActive = false;
@@ -1000,6 +1001,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await initializeNotifications();
     await loadPasswordSettings();
     await loadNameSettings();
+    await loadAutoCopySettings();
   }
 
   inboxDropdown.addEventListener('click', () => {
@@ -1375,6 +1377,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       nameSettings: { ...nameSettings, lastName }
     });
   }, 300));
+
+  async function loadAutoCopySettings() {
+    const { autoCopy = false } = await chrome.storage.local.get('autoCopy');
+    autoCopyToggle.checked = autoCopy;
+  }
+
+  autoCopyToggle.addEventListener('change', async (event) => {
+    const enabled = event.target.checked;
+    await chrome.storage.local.set({ autoCopy: enabled });
+    showToast(`Auto-copy credentials ${enabled ? 'enabled' : 'disabled'}`);
+  });
 
   await initializeInboxes();
 });
