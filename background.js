@@ -1,10 +1,43 @@
-const API_BASE_URL = 'https://burner.kiwi/api/v2';
+const API_BASE_URL = 'https://api.guerrillamail.com/ajax.php';
+
+// Helper function to manage all API calls to Guerrilla Mail.
+// It handles the session ID (sid) and standard parameters automatically.
+async function guerrillaApiCall(func, params = {}, method = 'GET') {
+  const { guerrillaSid } = await chrome.storage.local.get('guerrillaSid');
+  const urlParams = new URLSearchParams({
+    f: func,
+    ip: '127.0.0.1',
+    agent: '1ClickExt',
+    ...params,
+  });
+
+  if (guerrillaSid) {
+    urlParams.append('sid_token', guerrillaSid);
+  }
+
+  const response = await fetch(`${API_BASE_URL}?${urlParams.toString()}`, {
+    method: method,
+  });
+
+  if (!response.ok) {
+    throw new Error(`API call failed with status ${response.status}`);
+  }
+
+  // Guerrilla Mail uses a session token that we must manage manually.
+  // It can be returned in the JSON body, so we extract and save it.
+  const data = await response.json();
+  if (data.sid_token) {
+    await chrome.storage.local.set({ guerrillaSid: data.sid_token });
+  }
+
+  return data;
+}
+
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('1Click: Temp Mail with Autofill extension installed');
   initializeAnalytics();
   setupPeriodicEmailCheck();
-  setupInboxExpiryCheck();
 });
 
 // Initialize analytics storage
@@ -36,12 +69,12 @@ function setupPeriodicEmailCheck() {
       try {
         const { inboxes = [], notificationSettings = { enabled: true } } = await chrome.storage.local.get(['inboxes', 'notificationSettings']);
         if (!notificationSettings.enabled || inboxes.length === 0) {
-          console.log('Notifications disabled or no inboxes to check');
-          return;
+          return; // Don't run if notifications are off or no inboxes exist.
         }
 
+        // Check each inbox for new mail.
         for (const inbox of inboxes) {
-          await checkNewEmails(inbox.id, {});
+          await checkNewEmailsForNotification(inbox.address);
         }
       } catch (error) {
         console.error('Error in periodic email check:', error);
@@ -50,94 +83,37 @@ function setupPeriodicEmailCheck() {
   });
 }
 
-// Setup periodic inbox expiry checking
-function setupInboxExpiryCheck() {
-  chrome.alarms.create('checkInboxExpiry', {
-    periodInMinutes: 1 // Check every 1 minute
-  });
-
-  chrome.alarms.onAlarm.addListener(async (alarm) => {
-    if (alarm.name === 'checkInboxExpiry') {
-      try {
-        const { inboxes = [], notificationSettings = { enabled: true } } = await chrome.storage.local.get(['inboxes', 'notificationSettings']);
-        if (!notificationSettings.enabled || inboxes.length === 0) {
-          console.log('Notifications disabled or no inboxes to check for expiry');
-          return;
-        }
-
-        const now = Date.now();
-        for (const inbox of inboxes) {
-          if (inbox.expiresAt && inbox.expiresAt <= now) {
-            await deleteInbox(inbox.id);
-            if (notificationSettings.enabled) {
-              chrome.notifications.create({
-                type: 'basic',
-                iconUrl: 'icons/icon48.png',
-                title: 'Inbox Expired',
-                message: `The inbox ${inbox.address} has expired and was removed.`,
-                priority: 1
-              });
-            }
-            continue;
-          }
-
-          const timeLeft = inbox.expiresAt ? inbox.expiresAt - now : null;
-          if (timeLeft && timeLeft <= 3600000 && !inbox.expiryNotified) {
-            if (notificationSettings.enabled) {
-              chrome.notifications.create({
-                type: 'basic',
-                iconUrl: 'icons/icon48.png',
-                title: 'Inbox Expiring Soon',
-                message: `The inbox ${inbox.address} will expire in less than 1 hour.`,
-                priority: 1
-              });
-            }
-            inbox.expiryNotified = true;
-            await chrome.storage.local.set({ inboxes });
-          }
-        }
-      } catch (error) {
-        console.error('Error in periodic inbox expiry check:', error);
-      }
-    }
-  });
-}
-
-// Create a new temporary email inbox
-async function createInbox() {
+async function createInbox(emailUser = null) {
   try {
-    const response = await fetch(`${API_BASE_URL}/inbox`, {
-      method: 'GET'
-    });
+    // Get email data from Guerrilla Mail API
+    const data = emailUser
+      ? await guerrillaApiCall('set_email_user', { email_user: emailUser })
+      : await guerrillaApiCall('get_email_address');
 
-    if (!response.ok) {
-      throw new Error('Failed to create inbox');
-    }
-
-    const data = await response.json();
-    if (!data.success) {
-      throw new Error(data.errors?.msg || 'Failed to create inbox');
-    }
-
-    const { email, token } = data.result;
+    // Create inbox object
     const inbox = {
-      id: email.id,
-      address: email.address,
-      token,
+      id: data.email_addr,
+      address: data.email_addr,
       createdAt: Date.now(),
-      expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours expiry
-      expiryNotified: false
+      expiresAt: (data.email_timestamp + 3600) * 1000, // 60 minutes expiration (for mails only, email address dont expire)
     };
 
-    // Store the new inbox
-    const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
-    inboxes.push(inbox);
-    await chrome.storage.local.set({ inboxes });
+    const { inboxes = [], seenEmailIds = {} } = await chrome.storage.local.get(['inboxes', 'seenEmailIds']);
 
-    // Update analytics
-    const { analytics = {} } = await chrome.storage.local.get(['analytics']);
-    analytics.inboxesCreated = (analytics.inboxesCreated || 0) + 1;
-    await chrome.storage.local.set({ analytics });
+    // Check if inbox already exists to avoid duplicates
+    const existingInbox = inboxes.find(existingInbox => existingInbox.address === inbox.address);
+
+    if (!existingInbox) {
+      inboxes.push(inbox);
+      seenEmailIds[inbox.address] = [];
+
+      // Update analytics
+      const { analytics = {} } = await chrome.storage.local.get(['analytics']);
+      analytics.inboxesCreated = (analytics.inboxesCreated || 0) + 1;
+      await chrome.storage.local.set({ analytics });
+    }
+
+    await chrome.storage.local.set({ inboxes, seenEmailIds });
 
     return inbox;
   } catch (error) {
@@ -244,82 +220,30 @@ function findOtpInText(text, isSubject) {
 }
 
 // Check for new messages in a specific inbox
-async function checkNewEmails(inboxId, filters = {}) {
+async function checkNewEmailsForNotification(inboxAddress) {
   try {
-    const { inboxes = [], notificationSettings = { enabled: true } } = await chrome.storage.local.get(['inboxes', 'notificationSettings']);
-    const inbox = inboxes.find(i => i.id === inboxId);
-    if (!inbox || !inbox.token) {
-      throw new Error('Inbox or token not found');
-    }
+    // Set the session to the correct email address
+    const emailUser = inboxAddress.split('@')[0];
+    await guerrillaApiCall('set_email_user', { email_user: emailUser });
 
-    const response = await fetch(`${API_BASE_URL}/inbox/${inboxId}/messages`, {
-      headers: {
-        'X-Burner-Key': inbox.token
-      }
-    });
+    // Fetch the basic list of emails
+    const listData = await guerrillaApiCall('get_email_list', { offset: 0 });
+    const messages = listData.list || [];
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch messages');
-    }
+    // Get the list of email IDs we've already seen for this inbox
+    const { seenEmailIds = {} } = await chrome.storage.local.get('seenEmailIds');
+    const previouslySeenIds = new Set(seenEmailIds[inboxAddress] || []);
+    
+    // Find messages that are not in our "seen" list
+    const newMessages = messages.filter(msg => !previouslySeenIds.has(msg.mail_id));
 
-    const data = await response.json();
-    if (!data.success) {
-      throw new Error(data.errors?.msg || 'Failed to fetch messages');
-    }
-
-    let messages = data.result || [];
-    console.log(`Fetched ${messages.length} messages`);
-
-    // Process messages for OTP
-    let otpCount = 0;
-    messages = messages.map(msg => {
-      // Use the HTML body if available, as it often has better structure for parsing.
-      const otp = extractOTP(msg.subject || '', msg.body_html || msg.body_plain || '');
-      if (otp) otpCount++;
-      return {
-        ...msg,
-        otp,
-      };
-    });
-
-    // Check for new messages by comparing with stored messages
-    const { lastMessageTimestamps = {} } = await chrome.storage.local.get(['lastMessageTimestamps']);
-    const lastTimestamp = lastMessageTimestamps[inboxId] || 0;
-    const newMessages = messages.filter(msg => msg.received_at * 1000 > lastTimestamp);
-
-    // Send OTP from new messages to the active tab
     if (newMessages.length > 0) {
-      const latestNewMessageWithOtp = newMessages
-        .filter(msg => msg.otp)
-        .sort((a, b) => b.received_at - a.received_at)[0];
-      
-      if (latestNewMessageWithOtp) {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          if (tabs.length > 0 && tabs[0].id) {
-            console.log(`Sending OTP ${latestNewMessageWithOtp.otp} to tab ${tabs[0].id}`);
-            chrome.tabs.sendMessage(tabs[0].id, { 
-              type: 'fillOTP', 
-              otp: latestNewMessageWithOtp.otp 
-            });
-          }
-        });
-      }
-    }
-
-    // Update last message timestamp
-    if (messages.length > 0) {
-      lastMessageTimestamps[inboxId] = Math.max(...messages.map(msg => msg.received_at * 1000));
-      await chrome.storage.local.set({ lastMessageTimestamps });
-    }
-
-    // Send notifications for new messages
-    if (notificationSettings.enabled && newMessages.length > 0) {
       newMessages.forEach(msg => {
         chrome.notifications.create({
           type: 'basic',
           iconUrl: 'icons/icon48.png',
-          title: `New Email in ${inbox.address}`,
-          message: `${msg.from_name || 'Unknown Sender'}: ${msg.subject || 'No Subject'}`,
+          title: `New Email in ${inboxAddress}`,
+          message: `${msg.mail_from}: ${msg.mail_subject}`,
           priority: 0
         });
       });
@@ -330,46 +254,120 @@ async function checkNewEmails(inboxId, filters = {}) {
       await chrome.storage.local.set({ analytics });
     }
 
-    // Update analytics for emails received
-    const { analytics = {} } = await chrome.storage.local.get(['analytics']);
-    analytics.emailsReceived = (analytics.emailsReceived || 0) + messages.length;
+    // Update the "seen" list with all current email IDs for the next check
+    seenEmailIds[inboxAddress] = messages.map(msg => msg.mail_id);
+    await chrome.storage.local.set({ seenEmailIds });
     
-    // Apply filters
-    if (filters.searchQuery && filters.searchQuery.trim()) {
-      const query = filters.searchQuery.toLowerCase().trim();
-      console.log('Applying search query:', query);
-      messages = messages.filter(msg => {
-        const subjectMatch = msg.subject && msg.subject.toLowerCase().includes(query);
-        const fromMatch = msg.from_name && msg.from_name.toLowerCase().includes(query);
-        const bodyMatch = msg.body_plain && msg.body_plain.toLowerCase().includes(query);
-        return subjectMatch || fromMatch || bodyMatch;
+  } catch (error) {
+    // Errors in background checks should be silent to avoid console spam
+  }
+}
+
+async function fetchEmails(inboxAddress, filters = {}) {
+  try {
+    // === STEP 1: Initialize Guerrilla Mail session ===
+    const emailUser = inboxAddress.split('@[')[0];
+    // Set the active email for this session - required before fetching emails
+    await guerrillaApiCall('set_email_user', { email_user: emailUser });
+
+    // === STEP 2: Get basic email list ===
+    // Fetch the list of emails (this only gives us basic info like IDs)
+    const listData = await guerrillaApiCall('get_email_list', { offset: 0 });
+    const messages = listData.list || [];
+
+    const { seenEmailIds = {} } = await chrome.storage.local.get('seenEmailIds');
+    seenEmailIds[inboxAddress] = messages.map(msg => msg.mail_id);
+    await chrome.storage.local.set({ seenEmailIds });
+
+    // === STEP 3: Fetch detailed email content ===
+    // For each email, we need to make a separate API call to get the full content
+    // This is necessary because the list API only returns minimal information
+    const detailedMessages = await Promise.all(
+      messages.map(async (msg) => {
+        // Get full email content including subject and body
+        const emailData = await guerrillaApiCall('fetch_email', { email_id: msg.mail_id });
+        // Extract OTP code from subject and body if present
+        const otp = extractOTP(emailData.mail_subject, emailData.mail_body);
+
+        // Transform Guerrilla Mail format to our standardized format
+        return {
+          id: emailData.mail_id,
+          from_name: emailData.mail_from,
+          subject: emailData.mail_subject,
+          body_html: emailData.mail_body,
+          body_plain: emailData.mail_excerpt,
+          received_at: emailData.mail_timestamp,
+          otp: otp, // Will be null if no OTP found
+        };
+      })
+    );
+
+    // === STEP 4: Auto-fill OTP functionality ===
+    const messagesWithOtp = detailedMessages.filter(msg => msg.otp);
+
+    if (messagesWithOtp.length > 0) {
+      // Sort by timestamp (newest first) and get the most recent OTP
+      const latestOtpMessage = messagesWithOtp.sort((a, b) => b.received_at - a.received_at)[0];
+
+      // Send OTP to the active tab's content script for auto-filling
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        // Ensure we have a valid tab before sending message
+        if (tabs.length > 0 && tabs[0].id) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            type: 'fillOTP',
+            otp: latestOtpMessage.otp
+          });
+        }
       });
-      console.log(`After search filter: ${messages.length} messages`);
     }
 
-    // Update OTP analytics
-    analytics.otpsDetected = (analytics.otpsDetected || 0) + otpCount;
+    // === STEP 5: Update usage analytics ===
+    const { analytics = {} } = await chrome.storage.local.get(['analytics']);
+    analytics.emailsReceived = (analytics.emailsReceived || 0) + detailedMessages.length;
+    analytics.otpsDetected = (analytics.otpsDetected || 0) + messagesWithOtp.length;
     await chrome.storage.local.set({ analytics });
 
-    if (filters.hasOTP) {
-      console.log('Applying OTP filter');
-      messages = messages.filter(msg => msg.otp && msg.otp.trim().length > 0);
-      console.log(`After OTP filter: ${messages.length} messages`);
+    // === STEP 6: Apply user-specified filters ===
+    let filteredMessages = detailedMessages;
+
+    // Filter by search query if provided
+    if (filters.searchQuery) {
+      const searchQuery = filters.searchQuery.toLowerCase();
+      filteredMessages = filteredMessages.filter(msg =>
+        (msg.subject && msg.subject.toLowerCase().includes(searchQuery)) ||
+        (msg.from_name && msg.from_name.toLowerCase().includes(searchQuery)) ||
+        (msg.body_plain && msg.body_plain.toLowerCase().includes(searchQuery))
+      );
     }
 
-    return messages;
+    // Filter to only show messages with OTP codes if requested
+    if (filters.hasOTP) {
+      filteredMessages = filteredMessages.filter(msg => msg.otp);
+    }
+
+    return filteredMessages;
+
   } catch (error) {
-    console.error('Error checking emails:', error);
+    console.error('Error fetching emails:', error);
     throw error;
   }
 }
 
 // Delete an inbox
-async function deleteInbox(inboxId) {
+async function deleteInbox(inboxAddress) {
   try {
-    const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
-    const updatedInboxes = inboxes.filter(i => i.id !== inboxId);
-    await chrome.storage.local.set({ inboxes: updatedInboxes });
+    await guerrillaApiCall('forget_me', { email_addr: inboxAddress });
+
+    // Reset the session state by getting a new address. This fixes a bug
+    // where the API would temporarily "lose" the first email of other inboxes
+    // after a delete operation.
+    await guerrillaApiCall('get_email_address');
+
+    const { inboxes = [], seenEmailIds = {} } = await chrome.storage.local.get(['inboxes', 'seenEmailIds']);
+    const updatedInboxes = inboxes.filter(i => i.address !== inboxAddress);
+    // Clean up the seen IDs for the deleted inbox.
+    delete seenEmailIds[inboxAddress];
+    await chrome.storage.local.set({ inboxes: updatedInboxes, seenEmailIds });
     return { success: true };
   } catch (error) {
     console.error('Error deleting inbox:', error);
@@ -466,7 +464,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Received message:', message);
 
   if (message.type === 'createInbox') {
-    createInbox()
+    // Generate a random username for the new inbox if not provided.
+    const user = message.user || Math.random().toString(36).substring(2, 10);
+    createInbox(user)
       .then(inbox => {
         console.log('Inbox created:', inbox);
         sendResponse({ success: true, inbox });
@@ -479,7 +479,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'checkEmails') {
-    checkNewEmails(message.inboxId, message.filters)
+    fetchEmails(message.inboxId, message.filters)
       .then(messages => {
         console.log('Emails fetched:', messages.length);
         sendResponse({ success: true, messages });
@@ -517,26 +517,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   
-if (message.type === 'clearSessionCredentials') {
-  chrome.storage.session.remove('sessionCredentials')
-    .then(() => sendResponse({ success: true }))
-    .catch(error => {
+  if (message.type === 'clearSessionCredentials') {
+    chrome.storage.session.remove('sessionCredentials')
+      .then(() => sendResponse({ success: true }))
+      .catch(error => {
       console.error('Failed to clear session credentials:', error);
-      sendResponse({ success: false, error: error.message });
-    });
-  return true;
-}
+        sendResponse({ success: false, error: error.message });
+      });
+    return true;
+  }
 
-if (message.type === 'updateSessionCredentials') {
-  handleUpdateSessionCredentials(message, sender)
-    .then(result => sendResponse(result))
-    .catch(error => {
-      console.error('Error updating session credentials:', error);
-      sendResponse({ success: false, error: error.message });
-    });
-  return true;
-}
-
+  if (message.type === 'updateSessionCredentials') {
+    handleUpdateSessionCredentials(message, sender)
+      .then(result => sendResponse(result))
+      .catch(error => {
+        console.error('Error updating session credentials:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+    return true;
+  }
 
   if (message.type === 'getAnalytics') {
     chrome.storage.local.get(['analytics'])
@@ -553,7 +552,6 @@ if (message.type === 'updateSessionCredentials') {
 
   // Handle unknown message types
   console.warn('Unknown message type:', message.type);
-  sendResponse({ success: false, error: 'Unknown message type' });
   return false;
 });
 
