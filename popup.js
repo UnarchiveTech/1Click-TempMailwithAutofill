@@ -438,7 +438,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function timeAgo(timestamp) {
     if (!timestamp) return '';
     const now = Date.now();
-    const secondsPast = (now - timestamp) / 1000;
+    const secondsPast = (now - (timestamp * 1000)) / 1000;
 
     if (secondsPast < 60) {
       return `${Math.round(secondsPast)}s ago`;
@@ -459,7 +459,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       latestOtpCode.textContent = message.otp;
       
       const fromText = message.from_name ? `From: ${message.from_name}` : '';
-      const timeText = timeAgo(message.received_at * 1000);
+      const timeText = timeAgo(message.received_at);
       otpContext.textContent = [fromText, timeText].filter(Boolean).join(' | ');
 
     } else {
@@ -795,12 +795,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  async function checkMessages(inboxId) {
+  async function checkMessages(inboxAddress) {
     try {
-      const response = await chrome.runtime.sendMessage({ 
-        type: 'checkEmails', 
-        inboxId, 
-        filters: currentFilters 
+      messagesListElement.innerHTML = '<div class="message-item">Loading...</div>'; // Provide immediate feedback
+      const response = await chrome.runtime.sendMessage({
+        type: 'checkEmails',
+        inboxId: inboxAddress, // The inboxId is the email address
+        filters: currentFilters
       });
       if (response.success) {
         displayMessages(response.messages);
@@ -810,6 +811,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
       console.error('Error checking mail:', error);
       showToast('Failed to check mail', true);
+      messagesListElement.innerHTML = `<div class="message-item">Error: ${error.message}</div>`;
     }
   }
 
@@ -874,31 +876,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function calculateTimeLeft(expiresAt) {
-    return Math.max(0, expiresAt - Date.now());
+    return Math.max(0, (expiresAt - Date.now()) / 1000);
   }
 
   function formatTimeLeft(seconds) {
-    const hours = Math.floor(seconds / 3600000);
-    const minutes = Math.floor((seconds % 3600000) / 60000);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
     if (hours > 0) return `${hours}h ${minutes}m`;
     return `${minutes}m`;
   }
 
-  async function deleteInbox(inboxId) {
+  async function deleteInbox(inboxAddress) {
     try {
-      const { inboxes = [], activeInboxId } = await chrome.storage.local.get(['inboxes', 'activeInboxId']);
-      const updatedInboxes = inboxes.filter(inbox => inbox.id !== inboxId);
-      await chrome.storage.local.set({ inboxes: updatedInboxes });
+      await chrome.runtime.sendMessage({ type: 'deleteInbox', inboxId: inboxAddress });
       
-      if (activeInboxId === inboxId) {
-        const newActiveInbox = updatedInboxes.length > 0 ? updatedInboxes[0].id : null;
-        await chrome.storage.local.set({ activeInboxId: newActiveInbox });
+      const { inboxes = [], activeInboxId } = await chrome.storage.local.get(['inboxes', 'activeInboxId']);
+      if (activeInboxId === inboxAddress) {
+          const newActiveInbox = inboxes.length > 0 ? inboxes[0].id : null;
+          await chrome.storage.local.set({ activeInboxId: newActiveInbox });
       }
       
       await updateInboxDisplay();
-      if (updatedInboxes.length > 0 && activeInboxId === inboxId) {
-        checkMessages(updatedInboxes[0].id);
-      } else if (updatedInboxes.length === 0) {
+      if (inboxes.length === 0) {
         dropdownSelected.textContent = 'Select an inbox';
         copyEmailButton.style.display = 'none';
         messagesListElement.innerHTML = '<div class="message-item">No mail yet</div>';
@@ -913,42 +912,38 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function updateInboxDisplay() {
     try {
-      const { inboxes = [], activeInboxId: currentActiveInboxId } = await chrome.storage.local.get(['inboxes', 'activeInboxId']);
-      
-      const now = Date.now();
-      const validInboxes = inboxes.filter(inbox => inbox.expiresAt && inbox.expiresAt > now);
-      let activeInboxId = currentActiveInboxId;
+      let { inboxes = [], activeInboxId: currentActiveInboxId } = await chrome.storage.local.get(['inboxes', 'activeInboxId']);
 
-      if (validInboxes.length === 0) {
-        const newInboxResponse = await chrome.runtime.sendMessage({ type: 'createInbox' });
-        if (newInboxResponse.success) {
-          const newInbox = newInboxResponse.inbox;
-          validInboxes.push(newInbox);
-          
-          const allStoredInboxes = [...validInboxes];
-          await chrome.storage.local.set({ inboxes: allStoredInboxes, activeInboxId: newInbox.id });
-          activeInboxId = newInbox.id;
-          await addEmailToHistory(newInbox.address);
+      if (inboxes.length === 0) {
+        const response = await chrome.runtime.sendMessage({ type: 'createInbox' });
+        if (response.success) {
+          inboxes.push(response.inbox);
+          currentActiveInboxId = response.inbox.id;
+          await chrome.storage.local.set({ inboxes, activeInboxId: currentActiveInboxId });
         } else {
-          throw new Error(newInboxResponse.error);
+          throw new Error(response.error);
         }
       }
 
+      // Validate and set active inbox
+      let activeInboxId = currentActiveInboxId;
+      const activeInboxExists = inboxes.some(inbox => inbox.id === activeInboxId);
+      
+      if (!activeInboxExists) {
+        activeInboxId = inboxes.length > 0 ? inboxes[0].id : null;
+        await chrome.storage.local.set({ activeInboxId });
+      }
+      
+      // Clear and rebuild dropdown list
       dropdownList.innerHTML = '';
 
-      let activeInbox = validInboxes.find(inbox => inbox.id === activeInboxId);
-      if (!activeInbox) {
-        activeInboxId = validInboxes.length > 0 ? validInboxes[0].id : null;
-        await chrome.storage.local.set({ activeInboxId });
-        activeInbox = validInboxes.length > 0 ? validInboxes[0] : null;
-      }
-
-      validInboxes.forEach(inbox => {
-        const li = document.createElement('li');
-        li.setAttribute('data-id', inbox.id);
+      inboxes.forEach(inbox => {
+        const listItem = document.createElement('li');
+        listItem.setAttribute('data-id', inbox.id);
         const timeLeft = inbox.expiresAt ? calculateTimeLeft(inbox.expiresAt) : null;
         const expiryText = timeLeft ? `Expires in ${formatTimeLeft(timeLeft)}` : '';
-        li.innerHTML = `
+        // Build inbox item HTML
+        listItem.innerHTML = `
           <div class="inbox-item-details">
             <span class="inbox-address">${inbox.address}</span>
             ${expiryText ? `<span class="inbox-expiry">${expiryText}</span>` : ''}
@@ -959,27 +954,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             </svg>
           </button>
         `;
-        if (inbox.id === activeInboxId) {
-          dropdownSelected.textContent = inbox.address;
-          copyEmailButton.style.display = 'inline-flex';
-        }
-        dropdownList.appendChild(li);
-
-        const deleteButton = li.querySelector('.delete-button');
-        deleteButton.addEventListener('click', async (e) => {
+        
+        const deleteButton = listItem.querySelector('.delete-button');
+        deleteButton.addEventListener('click', (e) => {
           e.stopPropagation();
-          await deleteInbox(inbox.id);
+          deleteInbox(inbox.id);
         });
-
-        li.addEventListener('click', async () => {
+        
+        listItem.addEventListener('click', async () => {
           await chrome.storage.local.set({ activeInboxId: inbox.id });
-          dropdownSelected.textContent = inbox.address;
-          copyEmailButton.style.display = 'inline-flex';
-          dropdownList.style.display = 'none';
-          await checkMessages(inbox.id);
+          await updateInboxDisplay();
+          dropdownList.classList.remove('active');
         });
+        
+        dropdownList.appendChild(listItem);
       });
 
+      // Update UI based on active inbox
+      const activeInbox = inboxes.find(inbox => inbox.id === activeInboxId);
+      
       if (activeInbox) {
         dropdownSelected.textContent = activeInbox.address;
         copyEmailButton.style.display = 'inline-flex';
@@ -989,7 +982,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         copyEmailButton.style.display = 'none';
       }
     } catch (error) {
-      console.error('Error updating inbox display:', error);
+      console.error('Error initializing inboxes:', error);
       showToast('Failed to load inboxes', true);
     }
   }
@@ -1012,8 +1005,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const response = await chrome.runtime.sendMessage({ type: 'createInbox' });
       if (response.success) {
+        await chrome.storage.local.set({ activeInboxId: response.inbox.id });
         await updateInboxDisplay();
-        await checkMessages(response.inbox.id);
         await updateAnalyticsDashboard();
         showToast('New inbox created');
       } else {
