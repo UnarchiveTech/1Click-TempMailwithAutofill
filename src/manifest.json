@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "1Click: Temp Mail with Autofill",
+  "version": "2.0.0",
+  "description": "Generate temporary email addresses and auto-fill OTPs and login forms with one click.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "clipboardWrite",
+    "scripting",
+    "cookies"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "https://burner.kiwi/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "64": "icons/icon64.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "64": "icons/icon64.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "commands": {
+    "autofill-form": {
+      "suggested_key": {
+        "default": "Alt+Shift+F",
+        "mac": "Alt+Shift+F"
+      },
+      "description": "Autofill the signup form on the current page"
+    }
+  }
+}

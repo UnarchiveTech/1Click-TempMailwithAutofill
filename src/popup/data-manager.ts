@@ -1,8 +1,64 @@
-async function exportData() {
+// Type definitions
+interface EmailHistoryItem {
+  email: string;
+  timestamp: number;
+  [key: string]: any;
+}
+
+interface CredentialsHistoryItem {
+  domain: string;
+  username: string;
+  timestamp: number;
+  [key: string]: any;
+}
+
+interface Inbox {
+  id: string;
+  email: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+interface ExportData {
+  version: string;
+  exportDate: string;
+  data: {
+    emailHistory: EmailHistoryItem[];
+    credentialsHistory: CredentialsHistoryItem[];
+    settings: {
+      darkMode: boolean;
+      activeInboxId?: string;
+    };
+    inboxes: Inbox[];
+  };
+}
+
+interface ExportResult {
+  success: boolean;
+  error?: string;
+}
+
+interface ImportResult {
+  success: boolean;
+  error?: string;
+}
+
+interface DataManager {
+  exportData: () => Promise<ExportResult>;
+  importData: (file: File) => Promise<ImportResult>;
+}
+
+async function exportData(): Promise<ExportResult> {
   try {
-    const { emailHistory = [], credentialsHistory = [], darkMode = false, inboxes = [], activeInboxId } = await chrome.storage.local.get(['emailHistory', 'credentialsHistory', 'darkMode', 'inboxes', 'activeInboxId']);
+    const { emailHistory = [], credentialsHistory = [], darkMode = false, inboxes = [], activeInboxId } = await chrome.storage.local.get(['emailHistory', 'credentialsHistory', 'darkMode', 'inboxes', 'activeInboxId']) as {
+      emailHistory: EmailHistoryItem[];
+      credentialsHistory: CredentialsHistoryItem[];
+      darkMode: boolean;
+      inboxes: Inbox[];
+      activeInboxId?: string;
+    };
     
-    const exportData = {
+    const exportData: ExportData = {
       version: '1.0',
       exportDate: new Date().toISOString(),
       data: {
@@ -19,7 +75,7 @@ async function exportData() {
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     
-    const a = document.createElement('a');
+    const a = document.createElement('a') as HTMLAnchorElement;
     a.href = url;
     a.download = `oneclickautofill-backup-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(a);
@@ -28,16 +84,16 @@ async function exportData() {
     URL.revokeObjectURL(url);
     
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error exporting data:', error);
     return { success: false, error: error.message };
   }
 }
 
-async function importData(file) {
+async function importData(file: File): Promise<ImportResult> {
   try {
     const fileContent = await file.text();
-    const importedData = JSON.parse(fileContent);
+    const importedData = JSON.parse(fileContent) as ExportData;
     
     if (!importedData.version || !importedData.data) {
       throw new Error('Invalid backup file format');
@@ -84,9 +140,15 @@ async function importData(file) {
     });
     
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error importing data:', error);
     return { success: false, error: error.message };
+  }
+}
+
+declare global {
+  interface Window {
+    dataManager: DataManager;
   }
 }
 

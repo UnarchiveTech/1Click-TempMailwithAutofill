@@ -1,14 +1,19 @@
+// Type definitions
+interface Credentials {
+  [key: string]: string;
+}
+
 // Clear any existing session credentials when the page loads/reloads
 // This ensures we start with a clean slate for each new page visit
 chrome.runtime
   .sendMessage({ type: 'clearSessionCredentials' })
-  .catch(e => console.error('Could not send clear session message:', e));
+  .catch((e: Error) => console.error('Could not send clear session message:', e));
 
-let autoFillButtonsInjected = false;
-let injectedButtons = [];
+let autoFillButtonsInjected: boolean = false;
+let injectedButtons: HTMLElement[] = [];
 
 // Sends a message to the background script to update session data and copy to clipboard.
-async function updateAndCopyCredentials(credentialsToUpdate) {
+async function updateAndCopyCredentials(credentialsToUpdate: Credentials): Promise<void> {
     try {
         await chrome.runtime.sendMessage({
             type: 'updateSessionCredentials',
@@ -19,9 +24,9 @@ async function updateAndCopyCredentials(credentialsToUpdate) {
     }
 }
 
-function findSignupForm() {
+function findSignupForm(): Promise<HTMLFormElement | null> {
   const forms = Array.from(document.querySelectorAll('form'));
-  const signupForms = forms.filter(form => {
+  const signupForms = forms.filter((form: HTMLFormElement) => {
     const formText = form.textContent.toLowerCase();
     const action = (form.getAttribute('action') || '').toLowerCase();
     const isSignupForm = 
@@ -123,11 +128,11 @@ function findSignupForm() {
   return Promise.resolve(null);
 }
 
-function injectAutoFillButtons(form) {
+function injectAutoFillButtons(form: HTMLFormElement): void {
   if (autoFillButtonsInjected) return;
   removeInjectedButtons();
 
-  const inputFields = form.querySelectorAll('input[type="text"], input[type="email"], input[type="password"], input[type="tel"], input[type="checkbox"], select, [name*="email"], [id*="email"], [name*="username"], [id*="username"], [name*="name"]:not([name*="username"]), [id*="name"]:not([id*="username"]), [name*="phone"], [id*="phone"], [name*="mobile"], [id*="mobile"]');
+  const inputFields = form.querySelectorAll('input[type="text"], input[type="email"], input[type="password"], input[type="tel"], input[type="checkbox"], select, [name*="email"], [id*="email"], [name*="username"], [id*="username"], [name*="name"]:not([name*="username"]), [id*="name"]:not([id*="username"]), [name*="phone"], [id*="phone"], [name*="mobile"], [id*="mobile"]') as NodeListOf<HTMLInputElement | HTMLSelectElement>;
 
   // Helper to make SVGs non-interactive to clicks, ensuring the button always gets the event.
   const svgStyle = 'style="pointer-events: none;"';
