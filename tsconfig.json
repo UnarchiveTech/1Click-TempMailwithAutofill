@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "lib": ["ES2020", "DOM"],
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -13,18 +13,19 @@
     "noEmit": true,
     "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "paths": {
-      "@/*": ["src/*"]
-    },
-    "types": ["chrome", "node"]
+      "@/*": ["src/*"],
+      "~/*": ["src/*"]
+    }
   },
   "include": [
     "src/**/*",
-    "vite.config.ts"
+    "wxt.config.ts",
+    ".wxt/wxt.d.ts"
   ],
   "exclude": [
     "node_modules",
-    "dist",
-    "old"
+    ".output"
   ]
 }

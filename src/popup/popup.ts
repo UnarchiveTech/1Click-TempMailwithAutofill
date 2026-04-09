@@ -264,7 +264,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initialize notifications toggle
   async function initializeNotifications(): Promise<void> {
     try {
-      const { notificationSettings = { enabled: true } } = await chrome.storage.local.get(['notificationSettings']) as { notificationSettings: NotificationSettings };
+      const { notificationSettings = { enabled: true } } = await browser.storage.local.get(['notificationSettings']) as { notificationSettings: NotificationSettings };
       const notificationsToggle = document.getElementById('notificationsToggle') as HTMLButtonElement;
       notificationsToggle.setAttribute('data-enabled', notificationSettings.enabled.toString());
       updateNotificationIcon(notificationsToggle, notificationSettings.enabled);
@@ -282,7 +282,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!('Notification' in window)) {
       showToast('Notifications not supported in this browser', true);
       (notificationsToggle as any).checked = false;
-      await chrome.storage.local.set({ notificationSettings: { enabled: false } });
+      await browser.storage.local.set({ notificationSettings: { enabled: false } });
       return;
     }
 
@@ -291,7 +291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') {
           (notificationsToggle as any).checked = false;
-          await chrome.storage.local.set({ notificationSettings: { enabled: false } });
+          await browser.storage.local.set({ notificationSettings: { enabled: false } });
           showToast('Notifications permission denied', true);
         }
       } catch (error) {
@@ -300,7 +300,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     } else if (Notification.permission === 'denied') {
       (notificationsToggle as any).checked = false;
-      await chrome.storage.local.set({ notificationSettings: { enabled: false } });
+      await browser.storage.local.set({ notificationSettings: { enabled: false } });
       showToast('Notifications permission denied', true);
     }
   }
@@ -316,13 +316,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const currentEnabled = notificationsToggle.getAttribute('data-enabled') === 'true';
     const enabled = !currentEnabled;
     try {
-      await chrome.storage.local.set({ notificationSettings: { enabled } });
+      await browser.storage.local.set({ notificationSettings: { enabled } });
       updateNotificationIcon(notificationsToggle, enabled);
       if (enabled) {
         await requestNotificationPermission();
         if (Notification.permission !== 'granted') {
           updateNotificationIcon(notificationsToggle, false);
-          await chrome.storage.local.set({ notificationSettings: { enabled: false } });
+          await browser.storage.local.set({ notificationSettings: { enabled: false } });
           showToast('Notifications permission denied', true);
           return;
         }
@@ -706,7 +706,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // Delete each email through the background script
       for (const emailId of emailIds) {
-        const response = await chrome.runtime.sendMessage({ 
+        const response = await browser.runtime.sendMessage({ 
           type: 'deleteInbox', 
           inboxId: emailId 
         });
@@ -731,7 +731,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (selectedEmails.size === 0) return;
     
     try {
-      const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
       const selectedInboxes = inboxes.filter(inbox => selectedEmails.has(inbox.id));
       
       // Show export format selection
@@ -747,7 +747,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   reportIssueButton.addEventListener('click', () => {
-    chrome.tabs.create({
+    browser.tabs.create({
       url: 'https://github.com/UnarchiveTech/1Click-TempMailwithAutofill/issues/new'
     });
   });
@@ -791,12 +791,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (confirmed) {
       try {
         // Clear all extension storage
-        await chrome.storage.local.clear();
-        await chrome.storage.sync.clear();
+        await browser.storage.local.clear();
+        await browser.storage.sync.clear();
         
         // Clear session storage as well
         try {
-          await chrome.storage.session.clear();
+          await browser.storage.session.clear();
           console.log('Session storage cleared');
         } catch (sessionError) {
           console.warn('Failed to clear session storage:', sessionError);
@@ -819,11 +819,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             const hostname = url.hostname;
             
             // Get cookies for the exact domain
-            const exactCookies = await chrome.cookies.getAll({ domain: hostname });
+            const exactCookies = await browser.cookies.getAll({ domain: hostname });
             console.log(`Found ${exactCookies.length} cookies for exact domain ${hostname}`);
             
             // Get cookies for all subdomains (with leading dot)
-            const subdomainCookies = await chrome.cookies.getAll({ domain: '.' + hostname });
+            const subdomainCookies = await browser.cookies.getAll({ domain: '.' + hostname });
             console.log(`Found ${subdomainCookies.length} cookies for subdomains of ${hostname}`);
             
             // Combine all cookies
@@ -844,7 +844,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               
               for (const urlVariation of urlVariations) {
                 try {
-                  await chrome.cookies.remove({
+                  await browser.cookies.remove({
                     url: urlVariation,
                     name: cookie.name
                   });
@@ -865,13 +865,13 @@ document.addEventListener('DOMContentLoaded', async () => {
           // Clear all cookies for guerrillamail domains
           const guerrillaPatterns = ['guerrillamail.com', 'guerrillamailblock.com', 'sharklasers.com', 'grr.la'];
           for (const pattern of guerrillaPatterns) {
-            const cookies = await chrome.cookies.getAll({ domain: pattern });
-            const subdomainCookies = await chrome.cookies.getAll({ domain: '.' + pattern });
+            const cookies = await browser.cookies.getAll({ domain: pattern });
+            const subdomainCookies = await browser.cookies.getAll({ domain: '.' + pattern });
             const allPatternCookies = [...cookies, ...subdomainCookies];
             
             for (const cookie of allPatternCookies) {
               try {
-                await chrome.cookies.remove({
+                await browser.cookies.remove({
                   url: `https://${cookie.domain.startsWith('.') ? cookie.domain.substring(1) : cookie.domain}${cookie.path}`,
                   name: cookie.name
                 });
@@ -942,7 +942,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         // Send message to background script to reset state (including alarms)
-        const resetResponse = await chrome.runtime.sendMessage({ action: 'hardReset' });
+        const resetResponse = await browser.runtime.sendMessage({ action: 'hardReset' });
         if (!resetResponse.success) {
           throw new Error(resetResponse.error || 'Background reset failed');
         }
@@ -963,7 +963,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const initializeTheme = async () => {
     try {
-      const { darkMode } = await chrome.storage.local.get(['darkMode']);
+      const { darkMode } = await browser.storage.local.get(['darkMode']);
       if (darkMode === true) {
         document.body.classList.add('dark-mode');
         return true;
@@ -987,7 +987,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     try {
-      await chrome.storage.local.set({ darkMode: isDarkMode });
+      await browser.storage.local.set({ darkMode: isDarkMode });
     } catch (error) {
       console.error('Error saving theme preference:', error);
     }
@@ -1102,7 +1102,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      const { darkMode } = await chrome.storage.local.get(['darkMode']);
+      const { darkMode } = await browser.storage.local.get(['darkMode']);
 
       messageWindow.document.write(`
         <!DOCTYPE html>
@@ -1459,7 +1459,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function checkMessages(inboxId) {
     try {
       console.log('Sending checkEmails request for:', inboxId);
-      const response = await chrome.runtime.sendMessage({ 
+      const response = await browser.runtime.sendMessage({ 
         type: 'checkEmails', 
         inboxId, 
         filters: currentFilters 
@@ -1497,7 +1497,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function deleteInbox(inboxId) {
     try {
       // Call background script to properly delete inbox (including API calls)
-      const response = await chrome.runtime.sendMessage({ 
+      const response = await browser.runtime.sendMessage({ 
         type: 'deleteInbox', 
         inboxId: inboxId 
       });
@@ -1506,16 +1506,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         throw new Error(response.error || 'Failed to delete inbox');
       }
       
-      const { activeInboxId } = await chrome.storage.local.get(['activeInboxId']);
+      const { activeInboxId } = await browser.storage.local.get(['activeInboxId']);
       
       if (activeInboxId === inboxId) {
-        const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
+        const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
         const newActiveInbox = inboxes.length > 0 ? inboxes[0].id : null;
-        await chrome.storage.local.set({ activeInboxId: newActiveInbox });
+        await browser.storage.local.set({ activeInboxId: newActiveInbox });
       }
       
       await updateInboxDisplay();
-      const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
       if (inboxes.length > 0 && activeInboxId === inboxId) {
         checkMessages(inboxes[0].id);
       } else if (inboxes.length === 0) {
@@ -1533,20 +1533,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function updateInboxDisplay() {
     try {
-      const { inboxes = [], activeInboxId: currentActiveInboxId } = await chrome.storage.local.get(['inboxes', 'activeInboxId']);
+      const { inboxes = [], activeInboxId: currentActiveInboxId } = await browser.storage.local.get(['inboxes', 'activeInboxId']);
       
       const now = Date.now();
       const validInboxes = inboxes.filter(inbox => inbox.expiresAt && inbox.expiresAt > now);
       let activeInboxId = currentActiveInboxId;
 
       if (validInboxes.length === 0) {
-        const newInboxResponse = await chrome.runtime.sendMessage({ type: 'createInbox' });
+        const newInboxResponse = await browser.runtime.sendMessage({ type: 'createInbox' });
         if (newInboxResponse.success) {
           const newInbox = newInboxResponse.inbox;
           validInboxes.push(newInbox);
           
           const allStoredInboxes = [...validInboxes];
-          await chrome.storage.local.set({ inboxes: allStoredInboxes, activeInboxId: newInbox.id });
+          await browser.storage.local.set({ inboxes: allStoredInboxes, activeInboxId: newInbox.id });
           activeInboxId = newInbox.id;
         } else {
           throw new Error(newInboxResponse.error);
@@ -1558,7 +1558,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       let activeInbox = validInboxes.find(inbox => inbox.id === activeInboxId);
       if (!activeInbox) {
         activeInboxId = validInboxes.length > 0 ? validInboxes[0].id : null;
-        await chrome.storage.local.set({ activeInboxId });
+        await browser.storage.local.set({ activeInboxId });
         activeInbox = validInboxes.length > 0 ? validInboxes[0] : null;
       }
 
@@ -1662,7 +1662,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         li.addEventListener('click', async () => {
-          await chrome.storage.local.set({ activeInboxId: inbox.id });
+          await browser.storage.local.set({ activeInboxId: inbox.id });
           dropdownSelected.textContent = inbox.address;
           copyEmailButton.style.display = 'inline-flex';
           dropdownList.style.display = 'none';
@@ -1703,10 +1703,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   addInboxButton.addEventListener('click', async () => {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'createInbox' });
+      const response = await browser.runtime.sendMessage({ type: 'createInbox' });
       if (response.success) {
         // Set the newly created inbox as the active one
-        await chrome.storage.local.set({ activeInboxId: response.inbox.id });
+        await browser.storage.local.set({ activeInboxId: response.inbox.id });
         await updateInboxDisplay();
         await checkMessages(response.inbox.id);
         await updateAnalyticsDashboard();
@@ -1722,7 +1722,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   refreshMessagesButton.addEventListener('click', async () => {
     try {
-      const { activeInboxId } = await chrome.storage.local.get(['activeInboxId']);
+      const { activeInboxId } = await browser.storage.local.get(['activeInboxId']);
       if (activeInboxId) {
         await checkMessages(activeInboxId);
         await updateAnalyticsDashboard();
@@ -1755,7 +1755,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   searchMessagesInput.addEventListener('input', async () => {
     currentFilters.searchQuery = searchMessagesInput.value.trim();
-    const { activeInboxId } = await chrome.storage.local.get(['activeInboxId']);
+    const { activeInboxId } = await browser.storage.local.get(['activeInboxId']);
     if (activeInboxId) {
       debouncedCheckMessages(activeInboxId);
     }
@@ -1763,7 +1763,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   otpFilterCheckbox.addEventListener('change', async () => {
     currentFilters.hasOTP = otpFilterCheckbox.checked;
-    const { activeInboxId } = await chrome.storage.local.get(['activeInboxId']);
+    const { activeInboxId } = await browser.storage.local.get(['activeInboxId']);
     if (activeInboxId) {
       await checkMessages(activeInboxId);
     }
@@ -1771,7 +1771,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   startSignupButton.addEventListener('click', async () => {
     try {
-      const { activeInboxId, inboxes = [] } = await chrome.storage.local.get(['activeInboxId', 'inboxes']);
+      const { activeInboxId, inboxes = [] } = await browser.storage.local.get(['activeInboxId', 'inboxes']);
       if (!activeInboxId) {
         showToast('No inbox selected', true);
         return;
@@ -1782,9 +1782,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
       
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
       if (tab) {
-        chrome.tabs.sendMessage(tab.id, { 
+        browser.tabs.sendMessage(tab.id, { 
           action: 'startSignup', 
           email: activeInbox.address 
         });
@@ -1804,7 +1804,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function updateSavedLoginInfo() {
     try {
-      const { loginInfo = {} } = await chrome.storage.local.get(['loginInfo']);
+      const { loginInfo = {} } = await browser.storage.local.get(['loginInfo']);
       
       if (Object.keys(loginInfo).length === 0) {
         savedLoginInfo.innerHTML = '<div class="login-info-item">No saved login information</div>';
@@ -1926,9 +1926,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const response = await new Promise((resolve, reject) => {
-          chrome.runtime.sendMessage({ type: 'getAnalytics' }, (response) => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
+          browser.runtime.sendMessage({ type: 'getAnalytics' }, (response) => {
+            if (browser.runtime.lastError) {
+              reject(new Error(browser.runtime.lastError.message));
             } else {
               resolve(response);
             }
@@ -1996,7 +1996,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function updateArchivedEmails() {
     try {
-      const response = await chrome.runtime.sendMessage({ action: 'getArchivedEmails' });
+      const response = await browser.runtime.sendMessage({ action: 'getArchivedEmails' });
       if (response && response.success) {
         displayArchivedEmails(response.archivedEmails || []);
       } else {
@@ -2103,7 +2103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function loadPasswordSettings() {
-    const { passwordSettings = {} } = await chrome.storage.local.get('passwordSettings');
+    const { passwordSettings = {} } = await browser.storage.local.get('passwordSettings');
     const { useCustom = false, customPassword = '' } = passwordSettings;
     
     useCustomPasswordToggle.checked = useCustom;
@@ -2123,22 +2123,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       customPasswordContainer.classList.remove('visible');
     }
-    const { passwordSettings = {} } = await chrome.storage.local.get('passwordSettings');
-    await chrome.storage.local.set({ 
+    const { passwordSettings = {} } = await browser.storage.local.get('passwordSettings');
+    await browser.storage.local.set({ 
       passwordSettings: { ...passwordSettings, useCustom }
     });
   });
 
   customPasswordInput.addEventListener('input', debounce(async (event) => {
     const customPassword = event.target.value;
-    const { passwordSettings = {} } = await chrome.storage.local.get('passwordSettings');
-    await chrome.storage.local.set({ 
+    const { passwordSettings = {} } = await browser.storage.local.get('passwordSettings');
+    await browser.storage.local.set({ 
       passwordSettings: { ...passwordSettings, customPassword }
     });
   }, 300));
 
   async function loadNameSettings() {
-    const { nameSettings = {} } = await chrome.storage.local.get('nameSettings');
+    const { nameSettings = {} } = await browser.storage.local.get('nameSettings');
     const { useCustom = false, firstName = '', lastName = '' } = nameSettings;
     
     useCustomNameToggle.checked = useCustom;
@@ -2159,65 +2159,65 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       customNameContainer.classList.remove('visible');
     }
-    const { nameSettings = {} } = await chrome.storage.local.get('nameSettings');
-    await chrome.storage.local.set({ 
+    const { nameSettings = {} } = await browser.storage.local.get('nameSettings');
+    await browser.storage.local.set({ 
       nameSettings: { ...nameSettings, useCustom }
     });
   });
 
   customFirstNameInput.addEventListener('input', debounce(async (event) => {
     const firstName = event.target.value;
-    const { nameSettings = {} } = await chrome.storage.local.get('nameSettings');
-    await chrome.storage.local.set({ 
+    const { nameSettings = {} } = await browser.storage.local.get('nameSettings');
+    await browser.storage.local.set({ 
       nameSettings: { ...nameSettings, firstName }
     });
   }, 300));
 
   customLastNameInput.addEventListener('input', debounce(async (event) => {
     const lastName = event.target.value;
-    const { nameSettings = {} } = await chrome.storage.local.get('nameSettings');
-    await chrome.storage.local.set({ 
+    const { nameSettings = {} } = await browser.storage.local.get('nameSettings');
+    await browser.storage.local.set({ 
       nameSettings: { ...nameSettings, lastName }
     });
   }, 300));
 
   async function loadAutoCopySettings() {
-    const { autoCopy = false } = await chrome.storage.local.get('autoCopy');
+    const { autoCopy = false } = await browser.storage.local.get('autoCopy');
     autoCopyToggle.checked = autoCopy;
   }
 
   autoCopyToggle.addEventListener('change', async (event) => {
     const enabled = event.target.checked;
-    await chrome.storage.local.set({ autoCopy: enabled });
+    await browser.storage.local.set({ autoCopy: enabled });
     showToast(`Auto-copy credentials ${enabled ? 'enabled' : 'disabled'}`);
   });
 
   async function loadAutoRenewSettings() {
-    const { autoRenewGuerrilla = false } = await chrome.storage.local.get('autoRenewGuerrilla');
+    const { autoRenewGuerrilla = false } = await browser.storage.local.get('autoRenewGuerrilla');
     autoRenewToggle.checked = autoRenewGuerrilla;
   }
 
   autoRenewToggle.addEventListener('change', async (event) => {
     const enabled = event.target.checked;
-    await chrome.storage.local.set({ autoRenewGuerrilla: enabled });
+    await browser.storage.local.set({ autoRenewGuerrilla: enabled });
     showToast(`Auto-renew Guerrilla Mail ${enabled ? 'enabled' : 'disabled'}`);
   });
 
   // Check if this is the first time opening the extension and perform hard reset if needed
   async function checkFirstTimeOpening(): Promise<void> {
     try {
-      const { firstTimeOpened } = await chrome.storage.local.get(['firstTimeOpened']);
+      const { firstTimeOpened } = await browser.storage.local.get(['firstTimeOpened']);
       if (!firstTimeOpened) {
         console.log('First time opening detected - performing hard reset');
         // Clear all storage first
-        await chrome.storage.local.clear();
-        await chrome.storage.sync.clear();
+        await browser.storage.local.clear();
+        await browser.storage.sync.clear();
         
         // Send message to background script to reset state
-        const resetResponse = await chrome.runtime.sendMessage({ action: 'hardReset' });
+        const resetResponse = await browser.runtime.sendMessage({ action: 'hardReset' });
         if (resetResponse.success) {
           // Mark as opened for the first time
-          await chrome.storage.local.set({ firstTimeOpened: true });
+          await browser.storage.local.set({ firstTimeOpened: true });
           console.log('First time hard reset completed');
         }
       }
@@ -2229,7 +2229,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initialize Burner instances
   async function initializeBurnerInstances(): Promise<void> {
     try {
-      const response = await chrome.runtime.sendMessage({ action: 'getBurnerInstances' });
+      const response = await browser.runtime.sendMessage({ action: 'getBurnerInstances' });
       if (response.success) {
         const instances: BurnerInstance[] = response.instances;
         burnerInstanceSelect.innerHTML = '';
@@ -2242,7 +2242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         
         // Set selected instance
-        const selectedResponse = await chrome.runtime.sendMessage({ action: 'getSelectedBurnerInstance' });
+        const selectedResponse = await browser.runtime.sendMessage({ action: 'getSelectedBurnerInstance' });
         if (selectedResponse.success && selectedResponse.instance) {
           burnerInstanceSelect.value = selectedResponse.instance.id;
         }
@@ -2254,7 +2254,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Initialize provider selection
   async function initializeProvider(): Promise<void> {
-    const { selectedProvider = 'burner' } = await chrome.storage.local.get('selectedProvider');
+    const { selectedProvider = 'burner' } = await browser.storage.local.get('selectedProvider');
     providerSelect.value = selectedProvider;
     
     // Show/hide Burner instance container based on provider
@@ -2263,10 +2263,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       await initializeBurnerInstances();
       
       // Check if no burner instance is selected and set default to 'raceco'
-      const selectedResponse = await chrome.runtime.sendMessage({ action: 'getSelectedBurnerInstance' });
+      const selectedResponse = await browser.runtime.sendMessage({ action: 'getSelectedBurnerInstance' });
       if (!selectedResponse.success || !selectedResponse.instance) {
         // Set raceco as default burner instance
-        const setDefaultResponse = await chrome.runtime.sendMessage({ 
+        const setDefaultResponse = await browser.runtime.sendMessage({ 
           action: 'setSelectedBurnerInstance', 
           instanceId: 'raceco' 
         });
@@ -2284,7 +2284,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   providerSelect.addEventListener('change', async (event) => {
     const target = event.target as HTMLSelectElement;
     const selectedProvider = target.value;
-    await chrome.storage.local.set({ selectedProvider });
+    await browser.storage.local.set({ selectedProvider });
     
     // Show/hide Burner instance container
     if (selectedProvider === 'burner') {
@@ -2292,10 +2292,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       await initializeBurnerInstances();
       
       // Check if no burner instance is selected and set default to 'raceco'
-      const selectedResponse = await chrome.runtime.sendMessage({ action: 'getSelectedBurnerInstance' });
+      const selectedResponse = await browser.runtime.sendMessage({ action: 'getSelectedBurnerInstance' });
       if (!selectedResponse.success || !selectedResponse.instance) {
         // Set raceco as default burner instance
-        const setDefaultResponse = await chrome.runtime.sendMessage({ 
+        const setDefaultResponse = await browser.runtime.sendMessage({ 
           action: 'setSelectedBurnerInstance', 
           instanceId: 'raceco' 
         });
@@ -2309,7 +2309,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     // Send message to background script to update provider
-    chrome.runtime.sendMessage({ 
+    browser.runtime.sendMessage({ 
       action: 'setProvider', 
       provider: selectedProvider 
     });
@@ -2327,7 +2327,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const instanceId = target.value;
     
     try {
-      const response = await chrome.runtime.sendMessage({ 
+      const response = await browser.runtime.sendMessage({ 
         action: 'setSelectedBurnerInstance', 
         instanceId 
       });
@@ -2368,7 +2368,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         action: 'addCustomBurnerInstance',
         instance: {
           name: name.toLowerCase().replace(/\s+/g, '-'),
@@ -2400,10 +2400,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       let inboxes = [];
       
-      // Try to get data from chrome.storage, fallback to mock data for testing
+      // Try to get data from browser.storage, fallback to mock data for testing
       try {
-        if (typeof chrome !== 'undefined' && chrome.storage) {
-          const result = await chrome.storage.local.get(['inboxes']);
+        if (typeof chrome !== 'undefined' && browser.storage) {
+          const result = await browser.storage.local.get(['inboxes']);
           inboxes = result.inboxes || [];
         }
       } catch (error) {
@@ -2472,7 +2472,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Get stored emails to calculate accurate message counts
       let storedEmails = {};
       try {
-        const storedResult = await chrome.storage.local.get(['storedEmails']);
+        const storedResult = await browser.storage.local.get(['storedEmails']);
         storedEmails = storedResult.storedEmails || {};
       } catch (error) {
         console.log('Could not get stored emails:', error);
@@ -2778,11 +2778,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   async function toggleArchiveEmail(emailId) {
     try {
-      const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
       const inbox = inboxes.find(inbox => (inbox.id || Math.random().toString(36).substr(2, 9)) === emailId);
       if (inbox) {
         inbox.archived = !inbox.archived;
-        await chrome.storage.local.set({ inboxes });
+        await browser.storage.local.set({ inboxes });
         updateEmailManagement();
         showToast(`Email ${inbox.archived ? 'archived' : 'unarchived'}`);
       }
@@ -2798,7 +2798,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     try {
       // Call background script to properly delete inbox (including API calls)
-      const response = await chrome.runtime.sendMessage({ 
+      const response = await browser.runtime.sendMessage({ 
         type: 'deleteInbox', 
         inboxId: emailId 
       });
@@ -2818,7 +2818,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function renewGuerrillaEmail(emailId) {
     try {
-      const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
       const inbox = inboxes.find(inbox => inbox.id === emailId);
       
       if (!inbox) {
@@ -2830,7 +2830,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       
       // Use the same renewal logic as the background script
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'renewGuerrillaInbox',
         inboxId: emailId
       });
@@ -2843,7 +2843,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const updatedInbox = inboxes.find(inbox => inbox.id === emailId);
       if (updatedInbox) {
         updatedInbox.expiresAt = Date.now() + (60 * 60 * 1000); // 60 minutes from now
-        await chrome.storage.local.set({ inboxes });
+        await browser.storage.local.set({ inboxes });
       }
       
     } catch (error) {
@@ -2957,8 +2957,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const inboxesWithMessages = await Promise.all(
       inboxes.map(async (inbox) => {
         try {
-          if (typeof chrome !== 'undefined' && chrome.runtime) {
-            const response = await chrome.runtime.sendMessage({ 
+          if (typeof chrome !== 'undefined' && browser.runtime) {
+            const response = await browser.runtime.sendMessage({ 
               type: 'checkEmails', 
               inboxId: inbox.id, 
               filters: { searchQuery: '', hasOTP: false } 
@@ -3115,9 +3115,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // Try to fetch messages from background script, fallback to mock data for testing
       try {
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
+        if (typeof chrome !== 'undefined' && browser.runtime) {
           console.log('Fetching messages for email:', email.id);
-          const response = await chrome.runtime.sendMessage({ 
+          const response = await browser.runtime.sendMessage({ 
             type: 'checkEmails', 
             inboxId: email.id, 
             filters: { searchQuery: '', hasOTP: false } 
@@ -3275,7 +3275,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   async function exportSingleEmail(email) {
     try {
-      const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
       const inbox = inboxes.find(inbox => inbox.id === email.id);
       
       if (!inbox) {
@@ -3298,7 +3298,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Show edit email dialog for Guerrilla Mail addresses
   async function showEditEmailDialog(inboxId: string) {
     try {
-      const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
       const inbox = inboxes.find(i => i.id === inboxId);
       
       if (!inbox || inbox.provider !== 'guerrilla') {
@@ -3325,7 +3325,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Change email address using set_email_user API
   async function changeEmailAddress(inboxId: string, newAddress: string) {
     try {
-      const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
       const inbox = inboxes.find(i => i.id === inboxId);
       
       if (!inbox || !inbox.sidToken) {
@@ -3336,7 +3336,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const newUser = newAddress.split('@')[0];
       
       // Call set_email_user API
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         action: 'guerrillaApiCall',
         func: 'set_email_user',
         params: { email_user: newUser },
@@ -3356,15 +3356,15 @@ document.addEventListener('DOMContentLoaded', async () => {
           return i;
         });
         
-        await chrome.storage.local.set({ inboxes: updatedInboxes });
-        await chrome.storage.local.set({ activeInboxId: newAddress });
+        await browser.storage.local.set({ inboxes: updatedInboxes });
+        await browser.storage.local.set({ activeInboxId: newAddress });
         
         // Update stored emails key
-        const { storedEmails = {} } = await chrome.storage.local.get('storedEmails');
+        const { storedEmails = {} } = await browser.storage.local.get('storedEmails');
         if (storedEmails[inbox.address]) {
           storedEmails[newAddress] = storedEmails[inbox.address];
           delete storedEmails[inbox.address];
-          await chrome.storage.local.set({ storedEmails });
+          await browser.storage.local.set({ storedEmails });
         }
         
         showToast(`Email address changed to ${newAddress}`);
@@ -3381,7 +3381,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Toggle auto-extend setting for individual inbox
   async function toggleAutoExtend(inboxId: string) {
     try {
-      const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
       const inbox = inboxes.find(i => i.id === inboxId);
       
       if (!inbox || inbox.provider !== 'guerrilla') {
@@ -3403,7 +3403,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return i;
       });
       
-      await chrome.storage.local.set({ inboxes: updatedInboxes });
+      await browser.storage.local.set({ inboxes: updatedInboxes });
       
       showToast(`Auto-extend ${newAutoExtend ? 'enabled' : 'disabled'} for ${inbox.address}`);
       await updateInboxDisplay();
@@ -3416,7 +3416,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Extend email expiry by creating new hidden address and using set_email_user
   async function extendEmailExpiry(inboxId: string) {
     try {
-      const { inboxes = [] } = await chrome.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
       const inbox = inboxes.find(i => i.id === inboxId);
       
       if (!inbox || inbox.provider !== 'guerrilla') {
@@ -3430,7 +3430,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       showToast('Extending email expiry...', false);
       
       // Step 1: Create a new hidden email address to get fresh sidToken
-      const newEmailResponse = await chrome.runtime.sendMessage({
+      const newEmailResponse = await browser.runtime.sendMessage({
         action: 'guerrillaApiCall',
         func: 'get_email_address',
         params: {}
@@ -3444,7 +3444,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const newSidToken = newEmailResponse.data.sid_token;
       
       // Step 2: Use the new sidToken to set the old email address
-      const setUserResponse = await chrome.runtime.sendMessage({
+      const setUserResponse = await browser.runtime.sendMessage({
         action: 'guerrillaApiCall',
         func: 'set_email_user',
         params: { email_user: currentUser },
@@ -3464,7 +3464,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           return i;
         });
         
-        await chrome.storage.local.set({ inboxes: updatedInboxes });
+        await browser.storage.local.set({ inboxes: updatedInboxes });
         
         showToast(`Email expiry extended for ${currentAddress}`);
         await updateInboxDisplay();
