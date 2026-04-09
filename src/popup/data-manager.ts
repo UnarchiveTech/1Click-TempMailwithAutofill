@@ -1,4 +1,4 @@
-// Type definitions
+﻿// Type definitions
 interface EmailHistoryItem {
   email: string;
   timestamp: number;
@@ -109,15 +109,15 @@ async function importData(file: File): Promise<ImportResult> {
       await chrome.storage.local.get(['emailHistory', 'credentialsHistory', 'inboxes']);
     
     const mergedEmails = [...existingEmails];
-    emailHistory.forEach(newEmail => {
-      if (!mergedEmails.some(existing => existing.email === newEmail.email)) {
+    emailHistory.forEach((newEmail: any) => {
+      if (!mergedEmails.some((existing: any) => existing.email === newEmail.email)) {
         mergedEmails.push(newEmail);
       }
     });
     
     const mergedCreds = [...existingCreds];
-    credentialsHistory.forEach(newCred => {
-      if (!mergedCreds.some(existing => 
+    credentialsHistory.forEach((newCred: any) => {
+      if (!mergedCreds.some((existing: any) => 
         existing.domain === newCred.domain && 
         existing.username === newCred.username)) {
         mergedCreds.push(newCred);
@@ -125,8 +125,8 @@ async function importData(file: File): Promise<ImportResult> {
     });
     
     const mergedInboxes = [...existingInboxes];
-    inboxes.forEach(newInbox => {
-      if (!mergedInboxes.some(existing => existing.id === newInbox.id)) {
+    inboxes.forEach((newInbox: any) => {
+      if (!mergedInboxes.some((existing: any) => existing.id === newInbox.id)) {
         mergedInboxes.push(newInbox);
       }
     });

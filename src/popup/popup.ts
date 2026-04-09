@@ -1,4 +1,4 @@
-// QR code library will be loaded globally via script tag
+﻿// QR code library will be loaded globally via script tag
 declare const qrcodegen: any;
 
 // Type definitions
@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating QR code:', error);
       // Fallback: show error message on canvas
       const ctx = canvas.getContext('2d');
@@ -248,7 +248,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           showToast('QR code copied to clipboard!');
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to copy QR code:', error);
       showToast('Failed to copy QR code', true);
     }
@@ -264,14 +264,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initialize notifications toggle
   async function initializeNotifications(): Promise<void> {
     try {
-      const { notificationSettings = { enabled: true } } = await browser.storage.local.get(['notificationSettings']) as { notificationSettings: NotificationSettings };
+      const { notificationSettings = { enabled: true } } = await browser.storage.local.get(['notificationSettings']) as any as { notificationSettings: NotificationSettings };
       const notificationsToggle = document.getElementById('notificationsToggle') as HTMLButtonElement;
       notificationsToggle.setAttribute('data-enabled', notificationSettings.enabled.toString());
       updateNotificationIcon(notificationsToggle, notificationSettings.enabled);
       if (notificationSettings.enabled) {
         await requestNotificationPermission();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error initializing notifications:', error);
       showToast('Failed to initialize notifications', true);
     }
@@ -294,7 +294,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           await browser.storage.local.set({ notificationSettings: { enabled: false } });
           showToast('Notifications permission denied', true);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error requesting notification permission:', error);
         showToast('Failed to request notification permission', true);
       }
@@ -328,7 +328,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
       showToast(`Notifications ${enabled ? 'enabled' : 'disabled'}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating notification settings:', error);
       showToast('Failed to update notification settings', true);
       updateNotificationIcon(notificationsToggle, currentEnabled); // Revert icon
@@ -603,13 +603,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Tab switching
-  [activeEmailsTab, expiredEmailsTab, archivedEmailsTab].forEach(tab => {
+  [activeEmailsTab, expiredEmailsTab, archivedEmailsTab].forEach((tab: any) => {
     tab.addEventListener('click', () => {
       const tabType = tab.getAttribute('data-tab');
       currentEmailTab = tabType;
       
       // Update tab appearance
-      document.querySelectorAll('.tab-button').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-button').forEach((t: any) => t.classList.remove('active'));
       tab.classList.add('active');
       
       // Clear selections
@@ -625,7 +625,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Select all functionality
   selectAllEmails.addEventListener('change', () => {
     if (selectAllEmails.checked) {
-      filteredEmails.forEach(email => selectedEmails.add(email.id));
+      filteredEmails.forEach((email: any) => selectedEmails.add(email.id));
     } else {
       selectedEmails.clear();
     }
@@ -687,7 +687,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       selectAllEmails.checked = false;
       updateEmailManagement();
       showToast(`Archived ${selectedCount} email address(es)`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error archiving emails:', error);
       showToast('Failed to archive emails', true);
     }
@@ -720,7 +720,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       selectAllEmails.checked = false;
       updateEmailManagement();
       showToast(`Deleted ${selectedCount} email address(es)`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting emails:', error);
       showToast('Failed to delete emails', true);
     }
@@ -731,8 +731,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (selectedEmails.size === 0) return;
     
     try {
-      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
-      const selectedInboxes = inboxes.filter(inbox => selectedEmails.has(inbox.id));
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
+      const selectedInboxes = inboxes.filter((inbox: any) => selectedEmails.has(inbox.id));
       
       // Show export format selection
       const format = await showExportFormatDialog();
@@ -740,7 +740,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       await exportEmails(selectedInboxes, format);
       showToast(`Exported ${selectedEmails.size} email address(es) as ${format.toUpperCase()}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error exporting emails:', error);
       showToast('Failed to export emails', true);
     }
@@ -778,7 +778,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         showToast('Failed to import data: ' + result.error, true);
       }
-    } catch (error) {
+    } catch (error: any) {
       showToast('Error importing data: ' + error.message, true);
     } finally {
       fileInput.value = '';
@@ -786,7 +786,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   hardResetButton.addEventListener('click', async () => {
-    const confirmed = confirm('⚠️ HARD RESET WARNING\n\nThis will permanently delete ALL extension data including:\n• All saved inboxes and emails\n• Login information\n• Settings and preferences\n• Analytics data\n• Browser cookies for mail providers\n\nThis action cannot be undone. Are you sure you want to continue?');
+    const confirmed = confirm('ΓÜá∩╕Å HARD RESET WARNING\n\nThis will permanently delete ALL extension data including:\nΓÇó All saved inboxes and emails\nΓÇó Login information\nΓÇó Settings and preferences\nΓÇó Analytics data\nΓÇó Browser cookies for mail providers\n\nThis action cannot be undone. Are you sure you want to continue?');
     
     if (confirmed) {
       try {
@@ -829,7 +829,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Combine all cookies
             const allCookies = [...exactCookies, ...subdomainCookies];
             const uniqueCookies = allCookies.filter((cookie, index, self) => 
-              index === self.findIndex(c => c.name === cookie.name && c.domain === cookie.domain)
+              index === self.findIndex((c: any) => c.name === cookie.name && c.domain === cookie.domain)
             );
             
             console.log(`Total unique cookies to remove for ${hostname}: ${uniqueCookies.length}`);
@@ -876,7 +876,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                   name: cookie.name
                 });
                 console.log(`Removed additional cookie: ${cookie.name} from ${cookie.domain}`);
-              } catch (e) {
+              } catch (e: any) {
                 // Continue with other cookies
               }
             }
@@ -954,7 +954,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           window.location.reload();
         }, 1000);
         
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error during hard reset:', error);
         showToast('Hard reset failed: ' + error.message, true);
       }
@@ -963,13 +963,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const initializeTheme = async () => {
     try {
-      const { darkMode } = await browser.storage.local.get(['darkMode']);
+      const { darkMode } = await browser.storage.local.get(['darkMode']) as { darkMode?: boolean };
       if (darkMode === true) {
         document.body.classList.add('dark-mode');
         return true;
       }
       return false;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting theme preference:', error);
       return false;
     }
@@ -988,7 +988,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     try {
       await browser.storage.local.set({ darkMode: isDarkMode });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving theme preference:', error);
     }
   });
@@ -1032,7 +1032,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         showToast('Copied to clipboard!');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to copy text: ', err);
       showToast('Failed to copy', true);
     }
@@ -1093,7 +1093,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const left = (screen.width - width) / 2;
       const top = (screen.height - height) / 2;
       const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-        .map(b => b.toString(16).padStart(2, '0'))
+        .map((b: any) => b.toString(16).padStart(2, '0'))
         .join('');
 
       const messageWindow = window.open('', '_blank', `popup=yes,width=${width},height=${height},left=${left},top=${top},titlebar=no,frame=no,toolbar=no,menubar=no,location=no,status=no,resizable=yes,chrome=no,dialog=yes`);
@@ -1102,7 +1102,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      const { darkMode } = await browser.storage.local.get(['darkMode']);
+      const { darkMode } = await browser.storage.local.get(['darkMode']) as { darkMode?: boolean };
 
       messageWindow.document.write(`
         <!DOCTYPE html>
@@ -1378,8 +1378,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function findLatestOtp(messages) {
     const sortedMessages = messages
-      .filter(m => m.otp)
-      .sort((a, b) => b.received_at - a.received_at);
+      .filter((m: any) => m.otp)
+      .sort((a: any, b: any) => b.received_at - a.received_at);
     
     if (sortedMessages.length > 0) {
       const latestMessage = sortedMessages[0];
@@ -1407,7 +1407,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    messages.forEach(message => {
+    messages.forEach((message: any) => {
       console.log('Displaying message:', message);
       
       const messageElement = document.createElement('div');
@@ -1426,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           const timestamp = typeof message.received_at === 'number' ? message.received_at : parseInt(message.received_at);
           timeString = new Date(timestamp * 1000).toLocaleString();
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error formatting timestamp:', message.received_at, error);
       }
       
@@ -1475,7 +1475,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         throw new Error(response.error || 'Unknown error occurred');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error checking mail:', error);
       showToast('Failed to check mail', true);
     }
@@ -1494,7 +1494,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return `${minutes}m`;
   }
 
-  async function deleteInbox(inboxId) {
+  async function deleteInbox(inboxId: string) {
     try {
       // Call background script to properly delete inbox (including API calls)
       const response = await browser.runtime.sendMessage({ 
@@ -1506,16 +1506,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         throw new Error(response.error || 'Failed to delete inbox');
       }
       
-      const { activeInboxId } = await browser.storage.local.get(['activeInboxId']);
+      const { activeInboxId } = await browser.storage.local.get(['activeInboxId']) as { activeInboxId?: string };
       
       if (activeInboxId === inboxId) {
-        const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
+        const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
         const newActiveInbox = inboxes.length > 0 ? inboxes[0].id : null;
         await browser.storage.local.set({ activeInboxId: newActiveInbox });
       }
       
       await updateInboxDisplay();
-      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
       if (inboxes.length > 0 && activeInboxId === inboxId) {
         checkMessages(inboxes[0].id);
       } else if (inboxes.length === 0) {
@@ -1525,7 +1525,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateLatestOtp(null);
       }
       showToast('Inbox deleted');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting inbox:', error);
       showToast('Failed to delete inbox', true);
     }
@@ -1533,10 +1533,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function updateInboxDisplay() {
     try {
-      const { inboxes = [], activeInboxId: currentActiveInboxId } = await browser.storage.local.get(['inboxes', 'activeInboxId']);
+      const { inboxes = [], activeInboxId: currentActiveInboxId } = await browser.storage.local.get(['inboxes', 'activeInboxId']) as { inboxes?: Inbox[], activeInboxId?: string };
       
       const now = Date.now();
-      const validInboxes = inboxes.filter(inbox => inbox.expiresAt && inbox.expiresAt > now);
+      const validInboxes = inboxes.filter((inbox: any) => inbox.expiresAt && inbox.expiresAt > now);
       let activeInboxId = currentActiveInboxId;
 
       if (validInboxes.length === 0) {
@@ -1562,7 +1562,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         activeInbox = validInboxes.length > 0 ? validInboxes[0] : null;
       }
 
-      validInboxes.forEach(inbox => {
+      validInboxes.forEach((inbox: any) => {
         const li = document.createElement('li');
         li.setAttribute('data-id', inbox.id);
         const timeLeft = inbox.expiresAt ? calculateTimeLeft(inbox.expiresAt) : null;
@@ -1678,7 +1678,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         dropdownSelected.innerHTML = '<span>Select an inbox</span>';
         copyEmailButton.style.display = 'none';
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating inbox display:', error);
       showToast('Failed to load inboxes', true);
     }
@@ -1714,7 +1714,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         throw new Error(response.error);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating inbox:', error);
       showToast('Failed to create inbox', true);
     }
@@ -1722,7 +1722,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   refreshMessagesButton.addEventListener('click', async () => {
     try {
-      const { activeInboxId } = await browser.storage.local.get(['activeInboxId']);
+      const { activeInboxId } = await browser.storage.local.get(['activeInboxId']) as { activeInboxId?: string };
       if (activeInboxId) {
         await checkMessages(activeInboxId);
         await updateAnalyticsDashboard();
@@ -1730,16 +1730,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         showToast('No inbox selected', true);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error refreshing messages:', error);
       showToast('Failed to refresh messages', true);
     }
   });
 
   // Debounce function to limit rapid search updates
-  function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
+  function debounce(func: Function, wait: number) {
+    let timeout: any;
+    return function executedFunction(...args: any[]) {
       const later = () => {
         clearTimeout(timeout);
         func(...args);
@@ -1749,13 +1749,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
   }
 
-  const debouncedCheckMessages = debounce(async (inboxId) => {
+  const debouncedCheckMessages = debounce(async (inboxId: string) => {
     await checkMessages(inboxId);
   }, 300);
 
   searchMessagesInput.addEventListener('input', async () => {
     currentFilters.searchQuery = searchMessagesInput.value.trim();
-    const { activeInboxId } = await browser.storage.local.get(['activeInboxId']);
+    const { activeInboxId } = await browser.storage.local.get(['activeInboxId']) as { activeInboxId?: string };
     if (activeInboxId) {
       debouncedCheckMessages(activeInboxId);
     }
@@ -1763,7 +1763,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   otpFilterCheckbox.addEventListener('change', async () => {
     currentFilters.hasOTP = otpFilterCheckbox.checked;
-    const { activeInboxId } = await browser.storage.local.get(['activeInboxId']);
+    const { activeInboxId } = await browser.storage.local.get(['activeInboxId']) as { activeInboxId?: string };
     if (activeInboxId) {
       await checkMessages(activeInboxId);
     }
@@ -1771,7 +1771,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   startSignupButton.addEventListener('click', async () => {
     try {
-      const { activeInboxId, inboxes = [] } = await browser.storage.local.get(['activeInboxId', 'inboxes']);
+      const { activeInboxId, inboxes = [] } = await browser.storage.local.get(['activeInboxId', 'inboxes']) as { activeInboxId?: string, inboxes?: Inbox[] };
       if (!activeInboxId) {
         showToast('No inbox selected', true);
         return;
@@ -1792,7 +1792,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         showToast('No active tab found', true);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error starting signup:', error);
       showToast('Failed to start autofill', true);
     }
@@ -1804,7 +1804,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function updateSavedLoginInfo() {
     try {
-      const { loginInfo = {} } = await browser.storage.local.get(['loginInfo']);
+      const { loginInfo = {} } = await browser.storage.local.get(['loginInfo']) as any;
       
       if (Object.keys(loginInfo).length === 0) {
         savedLoginInfo.innerHTML = '<div class="login-info-item">No saved login information</div>';
@@ -1816,12 +1816,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       const domainsToShow = isFullView ? sortedDomains : sortedDomains.slice(0, 3);
 
       savedLoginInfo.innerHTML = domainsToShow
-        .map(domain => {
+        .map((domain: any) => {
           const entries = loginInfo[domain] || [];
-          const sortedEntries = entries.sort((a, b) => b.timestamp - a.timestamp);
+          const sortedEntries = entries.sort((a: any, b: any) => b.timestamp - a.timestamp);
           
           const credentialsHtml = sortedEntries
-            .map(entry => `
+            .map((entry: any) => `
               <div class="login-info-entry">
                 <div class="login-info-timestamp">${new Date(entry.timestamp).toLocaleString()}</div>
                 <div class="login-info-credentials">
@@ -1910,13 +1910,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       const copyButtons = savedLoginInfo.querySelectorAll('.login-info-copy');
-      copyButtons.forEach(button => {
+      copyButtons.forEach((button: any) => {
         button.addEventListener('click', () => {
           const value = button.getAttribute('data-value');
           copyToClipboard(value);
         });
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading login info:', error);
       savedLoginInfo.innerHTML = '<div class="login-info-item">Error loading login information</div>';
     }
@@ -1945,7 +1945,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
           throw new Error(response.error || 'No analytics data received');
         }
-      } catch (error) {
+      } catch (error: any) {
         console.warn(`Analytics fetch attempt ${attempt} failed:`, error);
         if (attempt === maxRetries) {
           throw error;
@@ -1987,7 +1987,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <span class="analytics-value">${notificationsSent}</span>
         </div>
       `;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading analytics:', error);
       analyticsDashboard.innerHTML = '<div class="analytics-item">Failed to load analytics. Please try again.</div>';
       showToast('Failed to load analytics', true);
@@ -2002,14 +2002,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         throw new Error(response?.error || 'Failed to load archived emails');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading archived emails:', error);
       archivedEmailsList.innerHTML = '<div class="archived-email-item">Failed to load archived emails. Please try again.</div>';
       showToast('Failed to load archived emails', true);
     }
   }
 
-  function displayArchivedEmails(archivedEmails) {
+  function displayArchivedEmails(archivedEmails: Record<string, any>) {
     if (!archivedEmailsList) return;
     
     archivedEmailsList.innerHTML = '';
@@ -2020,7 +2020,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Group emails by original inbox
     const groupedEmails = {};
-    archivedEmails.forEach(email => {
+    archivedEmails.forEach((email: any) => {
       const inbox = email.original_inbox || 'Unknown';
       if (!groupedEmails[inbox]) {
         groupedEmails[inbox] = [];
@@ -2044,7 +2044,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const emailsList = document.createElement('div');
       emailsList.className = 'archived-emails-list-inner';
       
-      emails.slice(0, 5).forEach(email => { // Show only first 5 emails per inbox
+      emails.slice(0, 5).forEach((email: any) => { // Show only first 5 emails per inbox
         const emailElement = document.createElement('div');
         emailElement.className = 'archived-email-item';
         
@@ -2062,7 +2062,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const timestamp = typeof email.received_at === 'number' ? email.received_at : parseInt(email.received_at);
             timeString = `Received: ${new Date(timestamp * 1000).toLocaleDateString()}`;
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error formatting archived email timestamp:', error);
         }
         
@@ -2103,7 +2103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function loadPasswordSettings() {
-    const { passwordSettings = {} } = await browser.storage.local.get('passwordSettings');
+    const { passwordSettings = {} } = await browser.storage.local.get('passwordSettings') as any;
     const { useCustom = false, customPassword = '' } = passwordSettings;
     
     useCustomPasswordToggle.checked = useCustom;
@@ -2117,28 +2117,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   useCustomPasswordToggle.addEventListener('change', async (event) => {
-    const useCustom = event.target.checked;
+    const useCustom = (event.target as HTMLInputElement).checked;
     if (useCustom) {
       customPasswordContainer.classList.add('visible');
     } else {
       customPasswordContainer.classList.remove('visible');
     }
-    const { passwordSettings = {} } = await browser.storage.local.get('passwordSettings');
+    const { passwordSettings = {} } = await browser.storage.local.get('passwordSettings') as any;
     await browser.storage.local.set({ 
       passwordSettings: { ...passwordSettings, useCustom }
     });
   });
 
   customPasswordInput.addEventListener('input', debounce(async (event) => {
-    const customPassword = event.target.value;
-    const { passwordSettings = {} } = await browser.storage.local.get('passwordSettings');
+    const customPassword = (event.target as HTMLInputElement).value;
+    const { passwordSettings = {} } = await browser.storage.local.get('passwordSettings') as any;
     await browser.storage.local.set({ 
       passwordSettings: { ...passwordSettings, customPassword }
     });
   }, 300));
 
   async function loadNameSettings() {
-    const { nameSettings = {} } = await browser.storage.local.get('nameSettings');
+    const { nameSettings = {} } = await browser.storage.local.get('nameSettings') as any;
     const { useCustom = false, firstName = '', lastName = '' } = nameSettings;
     
     useCustomNameToggle.checked = useCustom;
@@ -2153,52 +2153,52 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   useCustomNameToggle.addEventListener('change', async (event) => {
-    const useCustom = event.target.checked;
+    const useCustom = (event.target as HTMLInputElement).checked;
     if (useCustom) {
       customNameContainer.classList.add('visible');
     } else {
       customNameContainer.classList.remove('visible');
     }
-    const { nameSettings = {} } = await browser.storage.local.get('nameSettings');
+    const { nameSettings = {} } = await browser.storage.local.get('nameSettings') as any;
     await browser.storage.local.set({ 
       nameSettings: { ...nameSettings, useCustom }
     });
   });
 
   customFirstNameInput.addEventListener('input', debounce(async (event) => {
-    const firstName = event.target.value;
-    const { nameSettings = {} } = await browser.storage.local.get('nameSettings');
+    const firstName = (event.target as HTMLInputElement).value;
+    const { nameSettings = {} } = await browser.storage.local.get('nameSettings') as any;
     await browser.storage.local.set({ 
       nameSettings: { ...nameSettings, firstName }
     });
   }, 300));
 
   customLastNameInput.addEventListener('input', debounce(async (event) => {
-    const lastName = event.target.value;
-    const { nameSettings = {} } = await browser.storage.local.get('nameSettings');
+    const lastName = (event.target as HTMLInputElement).value;
+    const { nameSettings = {} } = await browser.storage.local.get('nameSettings') as any;
     await browser.storage.local.set({ 
       nameSettings: { ...nameSettings, lastName }
     });
   }, 300));
 
   async function loadAutoCopySettings() {
-    const { autoCopy = false } = await browser.storage.local.get('autoCopy');
+    const { autoCopy = false } = await browser.storage.local.get('autoCopy') as { autoCopy?: boolean };
     autoCopyToggle.checked = autoCopy;
   }
 
   autoCopyToggle.addEventListener('change', async (event) => {
-    const enabled = event.target.checked;
+    const enabled = (event.target as HTMLInputElement).checked;
     await browser.storage.local.set({ autoCopy: enabled });
     showToast(`Auto-copy credentials ${enabled ? 'enabled' : 'disabled'}`);
   });
 
   async function loadAutoRenewSettings() {
-    const { autoRenewGuerrilla = false } = await browser.storage.local.get('autoRenewGuerrilla');
+    const { autoRenewGuerrilla = false } = await browser.storage.local.get('autoRenewGuerrilla') as { autoRenewGuerrilla?: boolean };
     autoRenewToggle.checked = autoRenewGuerrilla;
   }
 
   autoRenewToggle.addEventListener('change', async (event) => {
-    const enabled = event.target.checked;
+    const enabled = (event.target as HTMLInputElement).checked;
     await browser.storage.local.set({ autoRenewGuerrilla: enabled });
     showToast(`Auto-renew Guerrilla Mail ${enabled ? 'enabled' : 'disabled'}`);
   });
@@ -2206,7 +2206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Check if this is the first time opening the extension and perform hard reset if needed
   async function checkFirstTimeOpening(): Promise<void> {
     try {
-      const { firstTimeOpened } = await browser.storage.local.get(['firstTimeOpened']);
+      const { firstTimeOpened } = await browser.storage.local.get(['firstTimeOpened']) as { firstTimeOpened?: boolean };
       if (!firstTimeOpened) {
         console.log('First time opening detected - performing hard reset');
         // Clear all storage first
@@ -2221,7 +2221,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           console.log('First time hard reset completed');
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error during first time opening check:', error);
     }
   }
@@ -2234,7 +2234,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const instances: BurnerInstance[] = response.instances;
         burnerInstanceSelect.innerHTML = '';
         
-        instances.forEach(instance => {
+        instances.forEach((instance: any) => {
           const option = document.createElement('option');
           option.value = instance.id;
           option.textContent = instance.displayName + (instance.isCustom ? ' (Custom)' : '');
@@ -2247,14 +2247,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           burnerInstanceSelect.value = selectedResponse.instance.id;
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error initializing Burner instances:', error);
     }
   }
 
   // Initialize provider selection
   async function initializeProvider(): Promise<void> {
-    const { selectedProvider = 'burner' } = await browser.storage.local.get('selectedProvider');
+    const { selectedProvider = 'burner' } = await browser.storage.local.get('selectedProvider') as { selectedProvider?: string };
     providerSelect.value = selectedProvider;
     
     // Show/hide Burner instance container based on provider
@@ -2336,7 +2336,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         showToast('Burner instance updated');
         await initializeInboxes();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error setting Burner instance:', error);
       showToast('Failed to update Burner instance', 'error');
     }
@@ -2384,7 +2384,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         showToast('Failed to add custom instance', 'error');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding custom instance:', error);
       showToast('Failed to add custom instance', 'error');
     }
@@ -2403,10 +2403,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Try to get data from browser.storage, fallback to mock data for testing
       try {
         if (typeof chrome !== 'undefined' && browser.storage) {
-          const result = await browser.storage.local.get(['inboxes']);
+          const result = await browser.storage.local.get(['inboxes']) as any;
           inboxes = result.inboxes || [];
         }
-      } catch (error) {
+      } catch (error: any) {
         console.log('Chrome storage not available, using mock data for testing');
       }
       
@@ -2472,13 +2472,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Get stored emails to calculate accurate message counts
       let storedEmails = {};
       try {
-        const storedResult = await browser.storage.local.get(['storedEmails']);
+        const storedResult = await browser.storage.local.get(['storedEmails']) as any;
         storedEmails = storedResult.storedEmails || {};
-      } catch (error) {
+      } catch (error: any) {
         console.log('Could not get stored emails:', error);
       }
       
-      allEmails = inboxes.map((inbox, index) => {
+      allEmails = inboxes.map((inbox: import("../utils/types").Inbox | any, index: number) => {
         // Get message count from stored emails or fallback to inbox.messages
         const inboxStoredEmails = storedEmails[inbox.address] || [];
         const messageCount = inboxStoredEmails.length > 0 ? inboxStoredEmails.length : (inbox.messages ? inbox.messages.length : 0);
@@ -2497,7 +2497,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       
       // Filter emails based on current tab and search query
-      filteredEmails = allEmails.filter(email => {
+      filteredEmails = allEmails.filter((email: any) => {
         // Tab filter
         let tabMatch = false;
         switch (currentEmailTab) {
@@ -2527,7 +2527,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       renderEmailList();
       updateSelectionUI();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating email management:', error);
     }
   }
@@ -2553,7 +2553,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     
-    filteredEmails.forEach(email => {
+    filteredEmails.forEach((email: any) => {
       const emailItem = document.createElement('div');
       emailItem.className = 'email-item';
       
@@ -2667,7 +2667,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               await exportSingleEmail(email, format);
               showToast(`Email exported as ${format.toUpperCase()}`);
             }
-          } catch (error) {
+          } catch (error: any) {
             console.error('Error exporting email:', error);
             showToast('Failed to export email', true);
           }
@@ -2688,7 +2688,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             await renewGuerrillaEmail(email.id);
             showToast('Email renewed successfully');
             updateEmailManagement(); // Refresh the list
-          } catch (error) {
+          } catch (error: any) {
             console.error('Error renewing email:', error);
             showToast('Failed to renew email', true);
           }
@@ -2701,7 +2701,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         editButton.addEventListener('click', async () => {
           try {
             await showEditEmailDialog(email.id);
-          } catch (error) {
+          } catch (error: any) {
             console.error('Error editing email:', error);
             showToast('Failed to edit email', true);
           }
@@ -2768,7 +2768,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   function updateEmailCheckboxes() {
-    filteredEmails.forEach(email => {
+    filteredEmails.forEach((email: any) => {
       const checkbox = document.getElementById(email.safeId) as HTMLInputElement;
       if (checkbox) {
         checkbox.checked = selectedEmails.has(email.id);
@@ -2778,7 +2778,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   async function toggleArchiveEmail(emailId) {
     try {
-      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
       const inbox = inboxes.find(inbox => (inbox.id || Math.random().toString(36).substr(2, 9)) === emailId);
       if (inbox) {
         inbox.archived = !inbox.archived;
@@ -2786,7 +2786,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateEmailManagement();
         showToast(`Email ${inbox.archived ? 'archived' : 'unarchived'}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error toggling archive:', error);
       showToast('Failed to update email', true);
     }
@@ -2810,7 +2810,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       selectedEmails.delete(emailId);
       updateEmailManagement();
       showToast('Email deleted');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting email:', error);
       showToast('Failed to delete email', true);
     }
@@ -2818,7 +2818,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function renewGuerrillaEmail(emailId) {
     try {
-      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
       const inbox = inboxes.find(inbox => inbox.id === emailId);
       
       if (!inbox) {
@@ -2846,7 +2846,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await browser.storage.local.set({ inboxes });
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error renewing email:', error);
       throw error;
     }
@@ -2872,7 +2872,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       document.body.appendChild(dialog);
       
-      dialog.querySelectorAll('.format-button').forEach(button => {
+      dialog.querySelectorAll('.format-button').forEach((button: any) => {
         button.addEventListener('click', () => {
           const format = button.getAttribute('data-format');
           document.body.removeChild(dialog);
@@ -2887,16 +2887,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   
-  async function exportMultipleEMLAsZip(inboxes, baseFilename) {
+  async function exportMultipleEMLAsZip(inboxes: any[], baseFilename: string) {
     try {
       // Import JSZip dynamically
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
       let fileIndex = 1;
       
-      inboxes.forEach(inbox => {
+      inboxes.forEach((inbox: any) => {
         const messages = inbox.messages || [];
-        messages.forEach(message => {
+        messages.forEach((message: any) => {
           const emlContent = generateSingleEMLContent(inbox, message);
           const subject = (message.subject || 'No Subject').replace(/[^a-zA-Z0-9\s]/g, '_').substring(0, 50);
           const sanitizedAddress = inbox.address.replace(/[^a-zA-Z0-9]/g, '_');
@@ -2917,7 +2917,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       a.click();
       URL.revokeObjectURL(url);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating ZIP file:', error);
       // Fallback to simple text archive if JSZip fails
       let archiveContent = '';
@@ -2926,9 +2926,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       archiveContent += '# Note: ZIP creation failed, using text format\n\n';
       
       let fileIndex = 1;
-      inboxes.forEach(inbox => {
+      inboxes.forEach((inbox: any) => {
         const messages = inbox.messages || [];
-        messages.forEach(message => {
+        messages.forEach((message: any) => {
           const emlContent = generateSingleEMLContent(inbox, message);
           const subject = (message.subject || 'No Subject').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
           const filename = `${fileIndex.toString().padStart(3, '0')}_${inbox.address}_${subject}.eml`;
@@ -2949,7 +2949,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
   
-  async function exportEmails(inboxes, format) {
+  async function exportEmails(inboxes: any[], format: string) {
     let content = '';
     let filename = `emails_${new Date().toISOString().split('T')[0]}`;
     
@@ -2968,7 +2968,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
           }
           return { ...inbox, messages: [] };
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error fetching messages for export:', error);
           return { ...inbox, messages: [] };
         }
@@ -3015,7 +3015,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   function generateEMLContent(inbox) {
     const messages = inbox.messages || [];
-    return messages.map(message => {
+    return messages.map((message: any) => {
       return generateSingleEMLContent(inbox, message);
     }).join('\n\n---\n\n');
   }
@@ -3045,7 +3045,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   function generateMBOXContent(inboxes) {
     let mboxContent = '';
-    inboxes.forEach(inbox => {
+    inboxes.forEach((inbox: any) => {
       const messages = inbox.messages || [];
       messages.forEach((message, index) => {
         const fromEmail = message.from_name || 'unknown@example.com';
@@ -3130,7 +3130,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Failed to fetch messages:', response?.error);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.log('Chrome runtime not available, using mock data for testing:', error);
       }
       
@@ -3168,11 +3168,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
       
-      messages = messages.sort((a, b) => b.received_at - a.received_at);
+      messages = messages.sort((a: any, b: any) => b.received_at - a.received_at);
       
       loadingMessages.style.display = 'none';
       
-      messages.forEach(message => {
+      messages.forEach((message: any) => {
         const messageElement = document.createElement('div');
         messageElement.className = 'message-item';
         
@@ -3220,7 +3220,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               timeString = 'Invalid date';
             }
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error formatting timestamp:', message.received_at, error);
           timeString = 'Invalid date';
         }
@@ -3253,7 +3253,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         emailMessagesList.appendChild(messageElement);
       });
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading email messages:', error);
       loadingMessages.style.display = 'none';
       noMessages.style.display = 'block';
@@ -3275,7 +3275,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   async function exportSingleEmail(email) {
     try {
-      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
       const inbox = inboxes.find(inbox => inbox.id === email.id);
       
       if (!inbox) {
@@ -3289,7 +3289,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       await exportEmails([inbox], format);
       showToast(`Email exported successfully as ${format.toUpperCase()}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error exporting single email:', error);
       showToast('Failed to export email', true);
     }
@@ -3298,7 +3298,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Show edit email dialog for Guerrilla Mail addresses
   async function showEditEmailDialog(inboxId: string) {
     try {
-      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
       const inbox = inboxes.find(i => i.id === inboxId);
       
       if (!inbox || inbox.provider !== 'guerrilla') {
@@ -3316,7 +3316,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const newAddress = `${newUser.trim()}@${domain}`;
         await changeEmailAddress(inboxId, newAddress);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error showing edit dialog:', error);
       showToast('Failed to show edit dialog', true);
     }
@@ -3325,7 +3325,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Change email address using set_email_user API
   async function changeEmailAddress(inboxId: string, newAddress: string) {
     try {
-      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
       const inbox = inboxes.find(i => i.id === inboxId);
       
       if (!inbox || !inbox.sidToken) {
@@ -3345,7 +3345,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       if (response.success && response.data) {
         // Update inbox with new address
-        const updatedInboxes = inboxes.map(i => {
+        const updatedInboxes = inboxes.map((i: any) => {
           if (i.id === inboxId) {
             return {
               ...i,
@@ -3360,7 +3360,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await browser.storage.local.set({ activeInboxId: newAddress });
         
         // Update stored emails key
-        const { storedEmails = {} } = await browser.storage.local.get('storedEmails');
+        const { storedEmails = {} } = await browser.storage.local.get('storedEmails') as any;
         if (storedEmails[inbox.address]) {
           storedEmails[newAddress] = storedEmails[inbox.address];
           delete storedEmails[inbox.address];
@@ -3372,7 +3372,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         showToast('Failed to change email address', true);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error changing email address:', error);
       showToast('Failed to change email address', true);
     }
@@ -3381,7 +3381,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Toggle auto-extend setting for individual inbox
   async function toggleAutoExtend(inboxId: string) {
     try {
-      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
       const inbox = inboxes.find(i => i.id === inboxId);
       
       if (!inbox || inbox.provider !== 'guerrilla') {
@@ -3393,7 +3393,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const newAutoExtend = !currentAutoExtend;
       
       // Update inbox with new auto-extend setting
-      const updatedInboxes = inboxes.map(i => {
+      const updatedInboxes = inboxes.map((i: any) => {
         if (i.id === inboxId) {
           return {
             ...i,
@@ -3407,7 +3407,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       showToast(`Auto-extend ${newAutoExtend ? 'enabled' : 'disabled'} for ${inbox.address}`);
       await updateInboxDisplay();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error toggling auto-extend:', error);
       showToast('Failed to toggle auto-extend', true);
     }
@@ -3416,7 +3416,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Extend email expiry by creating new hidden address and using set_email_user
   async function extendEmailExpiry(inboxId: string) {
     try {
-      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
       const inbox = inboxes.find(i => i.id === inboxId);
       
       if (!inbox || inbox.provider !== 'guerrilla') {
@@ -3453,7 +3453,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       if (setUserResponse.success && setUserResponse.data) {
         // Update inbox with new sidToken and extended expiry
-        const updatedInboxes = inboxes.map(i => {
+        const updatedInboxes = inboxes.map((i: any) => {
           if (i.id === inboxId) {
             return {
               ...i,
@@ -3471,7 +3471,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         showToast('Failed to extend email expiry', true);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error extending email expiry:', error);
       showToast('Failed to extend email expiry', true);
     }

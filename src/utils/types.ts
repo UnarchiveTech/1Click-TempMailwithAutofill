@@ -1,6 +1,6 @@
-/**
+﻿/**
  * Shared type definitions for the 1Click: Temp Mail with Autofill extension.
- * Single source of truth — import from here in all entrypoints.
+ * Single source of truth ΓÇö import from here in all entrypoints.
  */
 
 export type MailProvider = 'guerrilla' | 'burner';
@@ -32,9 +32,9 @@ export interface Inbox {
   id: string;
   /** The full email address, e.g. "foo@bar.com" */
   address: string;
-  token?: string;        // For burner.kiwi — bearer token
-  sidToken?: string;     // For guerrilla — per-inbox session token
-  lastSequence?: number; // For guerrilla — highest mail_id seen
+  token?: string;        // For burner.kiwi ΓÇö bearer token
+  sidToken?: string;     // For guerrilla ΓÇö per-inbox session token
+  lastSequence?: number; // For guerrilla ΓÇö highest mail_id seen
   provider: MailProvider;
   createdAt: number;     // ms timestamp
   expiresAt: number;     // ms timestamp

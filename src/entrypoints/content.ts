@@ -1,4 +1,4 @@
-
+﻿
 export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_end',
@@ -24,7 +24,7 @@ export default defineContentScript({
                 type: 'updateSessionCredentials',
                 credentials: credentialsToUpdate
             });
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error sending update credentials message:', error);
         }
     }
@@ -44,13 +44,13 @@ export default defineContentScript({
         if (!isSignupForm) return false;
     
         const inputs = form.querySelectorAll('input');
-        const hasEmailField = Array.from(inputs).some(input => 
+        const hasEmailField = Array.from(inputs).some((input: any) => 
           input.type === 'email' || 
           input.name.toLowerCase().includes('email') ||
           input.id.toLowerCase().includes('email') ||
           input.placeholder?.toLowerCase().includes('email')
         );
-        const hasPasswordField = Array.from(inputs).some(input => 
+        const hasPasswordField = Array.from(inputs).some((input: any) => 
           input.type === 'password' || 
           input.name.toLowerCase().includes('password') ||
           input.id.toLowerCase().includes('password') ||
@@ -66,13 +66,13 @@ export default defineContentScript({
     
       for (const form of forms) {
         const inputs = form.querySelectorAll('input');
-        const hasEmailField = Array.from(inputs).some(input => 
+        const hasEmailField = Array.from(inputs).some((input: any) => 
           input.type === 'email' || 
           input.name.toLowerCase().includes('email') ||
           input.id.toLowerCase().includes('email') ||
           input.placeholder?.toLowerCase().includes('email')
         );
-        const hasPasswordField = Array.from(inputs).some(input => 
+        const hasPasswordField = Array.from(inputs).some((input: any) => 
           input.type === 'password' || 
           input.name.toLowerCase().includes('password') ||
           input.id.toLowerCase().includes('password') ||
@@ -102,7 +102,7 @@ export default defineContentScript({
         if (!isLikelySignupForm) continue;
         
         const inputs = form.querySelectorAll('input');
-        const hasEmailField = Array.from(inputs).some(input => 
+        const hasEmailField = Array.from(inputs).some((input: any) => 
           input.type === 'email' || 
           input.name.toLowerCase().includes('email') ||
           input.id.toLowerCase().includes('email') ||
@@ -118,7 +118,7 @@ export default defineContentScript({
     
       for (const form of forms) {
         const inputs = form.querySelectorAll('input');
-        const hasEmailField = Array.from(inputs).some(input => 
+        const hasEmailField = Array.from(inputs).some((input: any) => 
           input.type === 'email' || 
           input.name.toLowerCase().includes('email') ||
           input.id.toLowerCase().includes('email') ||
@@ -142,7 +142,7 @@ export default defineContentScript({
       // Helper to make SVGs non-interactive to clicks, ensuring the button always gets the event.
       const svgStyle = 'style="pointer-events: none;"';
     
-      inputFields.forEach(inputField => {
+      inputFields.forEach((inputField: any) => {
         const isSelect = inputField.tagName.toLowerCase() === 'select';
         const isCheckbox = inputField.type === 'checkbox';
     
@@ -318,7 +318,7 @@ export default defineContentScript({
             let credentialsToUpdate = {};
     
             if (isEmail) {
-              const { activeInboxId, inboxes = [] } = await browser.storage.local.get(['activeInboxId', 'inboxes']);
+              const { activeInboxId, inboxes = [] } = await browser.storage.local.get(['activeInboxId', 'inboxes']) as { activeInboxId?: string, inboxes?: Inbox[] };
               const inbox = inboxes.find(i => i.id === activeInboxId);
               if (!inbox) {
                 throw new Error('No active inbox found');
@@ -390,7 +390,7 @@ export default defineContentScript({
                 await updateAndCopyCredentials(credentialsToUpdate);
             }
     
-          } catch (error) {
+          } catch (error: any) {
             console.error('Error filling field:', error);
             showTooltip(autoFillButton, 'Error: ' + error.message, true);
           }
@@ -486,7 +486,7 @@ export default defineContentScript({
                 isError: true 
               });
             }
-          } catch (error) {
+          } catch (error: any) {
             browser.runtime.sendMessage({ 
               status: 'Error during signup process: ' + error.message, 
               isError: true 
@@ -519,7 +519,7 @@ export default defineContentScript({
     }
     
     function removeInjectedButtons() {
-      injectedButtons.forEach(button => {
+      injectedButtons.forEach((button: any) => {
         if (button.parentNode) {
           button.parentNode.removeChild(button);
         }
@@ -600,7 +600,7 @@ export default defineContentScript({
           } else {
             showTooltip(fillAllButton, 'Failed to fill form', true);
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error filling form:', error);
           showTooltip(fillAllButton, 'Error: ' + error.message, true);
         }
@@ -628,7 +628,7 @@ export default defineContentScript({
         if (form) {
           injectAutoFillButtons(form);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error scanning for forms:', error);
       }
     }
@@ -638,9 +638,9 @@ export default defineContentScript({
     });
     
     const observer = new MutationObserver((mutations) => {
-      const mightHaveAddedForm = mutations.some(mutation => {
+      const mightHaveAddedForm = mutations.some((mutation: any) => {
         return mutation.addedNodes.length > 0 && 
-               Array.from(mutation.addedNodes).some(node => 
+               Array.from(mutation.addedNodes).some((node: any) => 
                  node.nodeName === 'FORM' || 
                  (node.nodeType === 1 && node.querySelector('form, input[type="email"]'))
                );
@@ -721,7 +721,7 @@ export default defineContentScript({
     
     async function fillSignupForm(form) {
       try {
-        const { activeInboxId, inboxes = [] } = await browser.storage.local.get(['activeInboxId', 'inboxes']);
+        const { activeInboxId, inboxes = [] } = await browser.storage.local.get(['activeInboxId', 'inboxes']) as { activeInboxId?: string, inboxes?: Inbox[] };
         const inbox = inboxes.find(i => i.id === activeInboxId);
         if (!inbox) {
           throw new Error('No active inbox found');
@@ -791,7 +791,7 @@ export default defineContentScript({
         }
     
         const selectElements = form.querySelectorAll('select');
-        selectElements.forEach(select => {
+        selectElements.forEach((select: any) => {
           fillSelectElement(select);
           select.dispatchEvent(new Event('input', { bubbles: true }));
           select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -811,7 +811,7 @@ export default defineContentScript({
         
         const passwordInputs = form.querySelectorAll('input[type="password"], input[name*="password"], input[id*="password"]');
         
-        passwordInputs.forEach(input => {
+        passwordInputs.forEach((input: any) => {
           input.value = password;
           input.dispatchEvent(new Event('input', { bubbles: true }));
           input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -839,7 +839,7 @@ export default defineContentScript({
         // Overwrite session data and copy all credentials to clipboard via background script
         await updateAndCopyCredentials(finalCredentials);
         
-        const { credentialsHistory = [] } = await browser.storage.local.get(['credentialsHistory']);
+        const { credentialsHistory = [] } = await browser.storage.local.get(['credentialsHistory']) as { credentialsHistory?: CredentialsHistoryItem[] };
         
         const newCredential = { 
           email: emailAddress,
@@ -858,7 +858,7 @@ export default defineContentScript({
         await browser.storage.local.set({ credentialsHistory });
     
         return true;
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error filling form:', error);
         return false;
       }
@@ -866,7 +866,7 @@ export default defineContentScript({
     
     function fillSelectElement(selectElement) {
       const options = Array.from(selectElement.options);
-      const validOptions = options.filter(option => 
+      const validOptions = options.filter((option: any) => 
         !option.disabled && 
         option.value && 
         option.value.trim() !== '' && 
@@ -892,7 +892,7 @@ export default defineContentScript({
         // Heuristics to find OTP inputs
         const keywords = ['otp', 'verification', 'code', 'pin', '2fa', 'two-factor', 'totp', 'mfa'];
         
-        const visibleInputs = Array.from(inputs).filter(input => {
+        const visibleInputs = Array.from(inputs).filter((input: any) => {
             if (input.type === 'hidden' || input.disabled || input.readOnly) return false;
             const rect = input.getBoundingClientRect();
             return rect.width > 0 && rect.height > 0;
@@ -976,7 +976,7 @@ export default defineContentScript({
     }
     
     async function getPasswordToFill() {
-      const { passwordSettings = {} } = await browser.storage.local.get(['passwordSettings']);
+      const { passwordSettings = {} } = await browser.storage.local.get(['passwordSettings']) as any;
       if (passwordSettings.useCustom && passwordSettings.customPassword) {
         return passwordSettings.customPassword;
       }
@@ -984,7 +984,7 @@ export default defineContentScript({
     }
     
     async function getNamesToFill() {
-      const { nameSettings = {} } = await browser.storage.local.get(['nameSettings']);
+      const { nameSettings = {} } = await browser.storage.local.get(['nameSettings']) as any;
       if (nameSettings.useCustom && nameSettings.firstName && nameSettings.lastName) {
         return {
           firstName: nameSettings.firstName,

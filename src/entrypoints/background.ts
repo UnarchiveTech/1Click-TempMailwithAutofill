@@ -1,4 +1,4 @@
-
+﻿
 export default defineBackground(() => {
   // Mail Provider Types
   type MailProvider = 'guerrilla' | 'burner';
@@ -159,7 +159,7 @@ export default defineBackground(() => {
       await browser.storage.local.remove(storageKeys);
       
       // Also clear any remaining data by getting all keys and removing them
-      const allData = await browser.storage.local.get(null);
+      const allData = await browser.storage.local.get(null) as any;
       const remainingKeys = Object.keys(allData);
       if (remainingKeys.length > 0) {
         await browser.storage.local.remove(remainingKeys);
@@ -167,7 +167,7 @@ export default defineBackground(() => {
       }
       
       console.log('Hard reset completed - all extension data cleared');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error during hard reset:', error);
     }
   }
@@ -175,22 +175,22 @@ export default defineBackground(() => {
   // Initialize default provider if not set
   async function initializeDefaultProvider(): Promise<void> {
     try {
-      const { selectedProvider } = await browser.storage.local.get(['selectedProvider']);
+      const { selectedProvider } = await browser.storage.local.get(['selectedProvider']) as { selectedProvider?: string };
       if (!selectedProvider) {
         await browser.storage.local.set({ selectedProvider: 'burner' });
         console.log('Set default provider to burner');
       }
       
       // Also initialize default burner instance if not set
-      const { selectedBurnerInstance } = await browser.storage.local.get(['selectedBurnerInstance']);
+      const { selectedBurnerInstance } = await browser.storage.local.get(['selectedBurnerInstance']) as { selectedBurnerInstance?: string };
       if (!selectedBurnerInstance) {
         await browser.storage.local.set({ selectedBurnerInstance: PREDEFINED_BURNER_INSTANCES[1].id });
         console.log('Set default burner instance to:', PREDEFINED_BURNER_INSTANCES[1].id);
       }
       // Verify storage
-      const { selectedBurnerInstance: storedInstance } = await browser.storage.local.get(['selectedBurnerInstance']);
+      const { selectedBurnerInstance: storedInstance } = await browser.storage.local.get(['selectedBurnerInstance']) as { selectedBurnerInstance?: string };
       console.log('Stored selectedBurnerInstance:', storedInstance);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error initializing default provider:', error);
     }
   }
@@ -198,7 +198,7 @@ export default defineBackground(() => {
   // Initialize analytics storage
   async function initializeAnalytics(): Promise<void> {
     try {
-      const { analytics = {} }: { analytics: Analytics } = await browser.storage.local.get(['analytics']);
+      const { analytics = {} }: { analytics: Analytics } = await browser.storage.local.get(['analytics']) as any;
       if (!analytics.createdAt) {
         analytics.createdAt = Date.now();
         analytics.inboxesCreated = 0;
@@ -208,7 +208,7 @@ export default defineBackground(() => {
         await browser.storage.local.set({ analytics });
         console.log('Analytics initialized:', analytics);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error initializing analytics:', error);
     }
   }
@@ -227,7 +227,7 @@ export default defineBackground(() => {
     browser.alarms.onAlarm.addListener(async (alarm) => {
       if (alarm.name === 'checkEmails') {
         try {
-          const { inboxes = [], notificationSettings = { enabled: true } } = await browser.storage.local.get(['inboxes', 'notificationSettings']);
+          const { inboxes = [], notificationSettings = { enabled: true } } = await browser.storage.local.get(['inboxes', 'notificationSettings']) as any;
           if (!notificationSettings.enabled || inboxes.length === 0) {
             console.log('Notifications disabled or no inboxes to check');
             return;
@@ -236,13 +236,13 @@ export default defineBackground(() => {
           for (const inbox of inboxes) {
             await checkNewEmails(inbox.id, {});
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error in periodic email check:', error);
         }
       } else if (alarm.name === 'cleanupStoredEmails') {
         try {
           await cleanupOldStoredEmails();
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error in stored emails cleanup:', error);
         }
       }
@@ -278,8 +278,8 @@ export default defineBackground(() => {
       }
       
       // Step 3: Update the inbox with new sidToken and extended expiry
-      const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
-      const inboxIndex = inboxes.findIndex(i => i.id === inbox.id);
+      const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
+      const inboxIndex = inboxes.findIndex((i: any) => i.id === inbox.id);
       
       if (inboxIndex !== -1) {
         inboxes[inboxIndex] = {
@@ -294,7 +294,7 @@ export default defineBackground(() => {
       } else {
         throw new Error('Inbox not found in storage during renewal');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error auto-renewing Guerrilla Mail inbox:', error);
       throw error;
     }
@@ -309,7 +309,7 @@ export default defineBackground(() => {
     browser.alarms.onAlarm.addListener(async (alarm) => {
       if (alarm.name === 'checkInboxExpiry') {
         try {
-          const { inboxes = [], notificationSettings = { enabled: true } } = await browser.storage.local.get(['inboxes', 'notificationSettings']);
+          const { inboxes = [], notificationSettings = { enabled: true } } = await browser.storage.local.get(['inboxes', 'notificationSettings']) as any;
           if (!notificationSettings.enabled || inboxes.length === 0) {
             console.log('Notifications disabled or no inboxes to check for expiry');
             return;
@@ -328,7 +328,7 @@ export default defineBackground(() => {
                   await autoRenewGuerrillaInbox(inbox);
                   
                   // Update the inbox in the array with new expiry time
-                  const { inboxes: refreshedInboxes = [] } = await browser.storage.local.get(['inboxes']);
+                  const { inboxes: refreshedInboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
                   const refreshedInbox = refreshedInboxes.find(i => i.id === inbox.id);
                   if (refreshedInbox) {
                     updatedInboxes[i] = refreshedInbox;
@@ -344,7 +344,7 @@ export default defineBackground(() => {
                     });
                   }
                   continue;
-                } catch (error) {
+                } catch (error: any) {
                   console.error('Failed to auto-renew inbox:', inbox.address, error);
                   // Fall through to normal expiry handling if auto-renewal fails
                 }
@@ -379,7 +379,7 @@ export default defineBackground(() => {
           }
           
           await browser.storage.local.set({ inboxes: updatedInboxes });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error in periodic inbox expiry check:', error);
         }
       }
@@ -427,7 +427,7 @@ export default defineBackground(() => {
     console.log('Final API URL:', `${PROVIDERS.guerrilla.apiUrl}?${urlParams.toString()}`);
   
     // Check if we should force new sessions (after hard reset)
-    const storage = await browser.storage.local.get(['forceNewSessions']);
+    const storage = await browser.storage.local.get(['forceNewSessions']) as any;
     const shouldForceNewSession = storage.forceNewSessions === true;
     
     // Use credentials: 'omit' for fresh sessions, and add cache-busting for get_email_address
@@ -516,7 +516,7 @@ export default defineBackground(() => {
     
     // Keep forceNewSessions flag for multiple calls, but set a timestamp to auto-clear after 5 minutes
     if (shouldForceNewSession && response.ok) {
-      const storage = await browser.storage.local.get(['forceNewSessionsTimestamp']);
+      const storage = await browser.storage.local.get(['forceNewSessionsTimestamp']) as any;
       const now = Date.now();
       
       if (!storage.forceNewSessionsTimestamp) {
@@ -537,14 +537,14 @@ export default defineBackground(() => {
   
   // Burner.kiwi instance management
   async function getBurnerInstances(): Promise<BurnerInstance[]> {
-    const { customBurnerInstances = [] } = await browser.storage.local.get(['customBurnerInstances']);
+    const { customBurnerInstances = [] } = await browser.storage.local.get(['customBurnerInstances']) as { customBurnerInstances?: any[] };
     const instances = [...PREDEFINED_BURNER_INSTANCES, ...customBurnerInstances];
-    console.log('Burner instances:', instances.map(i => ({ id: i.id, name: i.name })));
+    console.log('Burner instances:', instances.map((i: any) => ({ id: i.id, name: i.name })));
     return instances;
   }
   
   async function addCustomBurnerInstance(instance: Omit<BurnerInstance, 'id' | 'isCustom'>): Promise<void> {
-    const { customBurnerInstances = [] } = await browser.storage.local.get(['customBurnerInstances']);
+    const { customBurnerInstances = [] } = await browser.storage.local.get(['customBurnerInstances']) as { customBurnerInstances?: any[] };
     const newInstance: BurnerInstance = {
       ...instance,
       id: `custom_${Date.now()}`,
@@ -555,13 +555,13 @@ export default defineBackground(() => {
   }
   
   async function removeCustomBurnerInstance(instanceId: string): Promise<void> {
-    const { customBurnerInstances = [] } = await browser.storage.local.get(['customBurnerInstances']);
+    const { customBurnerInstances = [] } = await browser.storage.local.get(['customBurnerInstances']) as { customBurnerInstances?: any[] };
     const filtered = customBurnerInstances.filter((instance: BurnerInstance) => instance.id !== instanceId);
     await browser.storage.local.set({ customBurnerInstances: filtered });
   }
   
   async function getSelectedBurnerInstance(): Promise<BurnerInstance | null> {
-    const { selectedBurnerInstance } = await browser.storage.local.get(['selectedBurnerInstance']);
+    const { selectedBurnerInstance } = await browser.storage.local.get(['selectedBurnerInstance']) as { selectedBurnerInstance?: string };
     console.log('Retrieved selectedBurnerInstance:', selectedBurnerInstance);
     if (!selectedBurnerInstance || typeof selectedBurnerInstance !== 'string') {
       console.log('Invalid or missing selectedBurnerInstance, resetting to default');
@@ -570,7 +570,7 @@ export default defineBackground(() => {
     }
     
     const instances = await getBurnerInstances();
-    console.log('Available instances:', instances.map(i => ({ id: i.id, name: i.name })));
+    console.log('Available instances:', instances.map((i: any) => ({ id: i.id, name: i.name })));
     const selected = instances.find(instance => instance.id === selectedBurnerInstance) || null;
     if (!selected) {
       console.log('No matching instance found, resetting to default');
@@ -596,7 +596,7 @@ export default defineBackground(() => {
   // Create inbox based on selected provider
   async function createInbox(provider?: MailProvider, emailUser?: string): Promise<Inbox> {
     try {
-      const { selectedProvider = 'burner' } = await browser.storage.local.get(['selectedProvider']);
+      const { selectedProvider = 'burner' } = await browser.storage.local.get(['selectedProvider']) as { selectedProvider?: string };
       const activeProvider = provider || selectedProvider;
   
       let inbox: Inbox;
@@ -606,7 +606,7 @@ export default defineBackground(() => {
         console.log('Email user provided:', emailUser);
         
         // Check if we have existing inboxes and if this might be a session persistence issue
-        const { inboxes: existingInboxes = [] } = await browser.storage.local.get(['inboxes']);
+        const { inboxes: existingInboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
         const hasExistingGuerrillaInboxes = existingInboxes.some((i: Inbox) => i.provider === 'guerrilla');
         
         if (hasExistingGuerrillaInboxes) {
@@ -691,11 +691,11 @@ export default defineBackground(() => {
         throw new Error(`Unsupported provider: ${activeProvider}`);
       }
   
-      const { inboxes = [], seenEmailIds = {} }: { inboxes: Inbox[], seenEmailIds: Record<string, string[]> } = await browser.storage.local.get(['inboxes', 'seenEmailIds']);
+      const { inboxes = [], seenEmailIds = {} }: { inboxes: Inbox[], seenEmailIds: Record<string, string[]> } = await browser.storage.local.get(['inboxes', 'seenEmailIds']) as any;
   
       // Check if inbox already exists to avoid duplicates
       console.log('Checking for duplicate inboxes...');
-      console.log('Existing inboxes:', inboxes.map(i => ({ address: i.address, provider: i.provider })));
+      console.log('Existing inboxes:', inboxes.map((i: any) => ({ address: i.address, provider: i.provider })));
       
       const existingInbox = inboxes.find(existingInbox => existingInbox.address === inbox.address);
       console.log('Is duplicate?', !!existingInbox);
@@ -718,7 +718,7 @@ export default defineBackground(() => {
               console.log('Updated existing inbox with new sidToken:', inbox.sidToken);
               
               // Update the inbox in storage
-              const inboxIndex = inboxes.findIndex(i => i.address === existingInbox.address);
+              const inboxIndex = inboxes.findIndex((i: any) => i.address === existingInbox.address);
               if (inboxIndex !== -1) {
                 inboxes[inboxIndex] = existingInbox;
                 await browser.storage.local.set({ inboxes });
@@ -728,7 +728,7 @@ export default defineBackground(() => {
           } else {
              console.log('Existing inbox is expired, removing it and creating new one');
              // Remove the expired inbox and continue with creating a new one
-             const updatedInboxes = inboxes.filter(i => i.address !== existingInbox.address);
+             const updatedInboxes = inboxes.filter((i: any) => i.address !== existingInbox.address);
              await browser.storage.local.set({ inboxes: updatedInboxes });
              // Update the local inboxes array for the rest of this function
              inboxes.length = 0;
@@ -779,7 +779,7 @@ export default defineBackground(() => {
   
       // Update analytics
       console.log('Updating analytics for inbox creation...');
-      const { analytics = {} }: { analytics: Analytics } = await browser.storage.local.get(['analytics']);
+      const { analytics = {} }: { analytics: Analytics } = await browser.storage.local.get(['analytics']) as any;
       analytics.inboxesCreated = (analytics.inboxesCreated || 0) + 1;
       await browser.storage.local.set({ analytics });
       console.log('Analytics updated');
@@ -787,7 +787,7 @@ export default defineBackground(() => {
       await browser.storage.local.set({ inboxes, seenEmailIds });
   
       return inbox;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating inbox:', error);
       throw error;
     }
@@ -872,7 +872,7 @@ export default defineBackground(() => {
   // Check for new messages based on provider
   async function checkNewEmails(inboxId: string, filters: EmailFilters = {}): Promise<Message[]> {
     try {
-      const { inboxes = [] }: { inboxes: Inbox[] } = await browser.storage.local.get(['inboxes']);
+      const { inboxes = [] }: { inboxes: Inbox[] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
       const inbox = inboxes.find(i => i.id === inboxId);
       if (!inbox) {
         throw new Error('Inbox not found');
@@ -887,7 +887,7 @@ export default defineBackground(() => {
       }
   
       return messages;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error checking emails:', error);
       throw error;
     }
@@ -917,7 +917,7 @@ export default defineBackground(() => {
     console.log('Found', messages.length, 'messages');
   
     // Get existing stored emails for this inbox
-    const { storedEmails = {} } = await browser.storage.local.get('storedEmails');
+    const { storedEmails = {} } = await browser.storage.local.get('storedEmails') as any;
     if (!storedEmails[inbox.address]) {
       storedEmails[inbox.address] = [];
     }
@@ -1047,7 +1047,7 @@ export default defineBackground(() => {
       console.log('Updating sequence number from', sequenceNumber, 'to', maxMailId);
       
       // Update inbox with new sequence number
-      const { inboxes = [] } = await browser.storage.local.get('inboxes');
+      const { inboxes = [] } = await browser.storage.local.get('inboxes') as { inboxes?: Inbox[] };
       const updatedInboxes = inboxes.map((inb: Inbox) => {
         if (inb.id === inbox.id) {
           return { ...inb, lastSequence: maxMailId };
@@ -1063,13 +1063,13 @@ export default defineBackground(() => {
   
   // Get stored emails for an inbox
   async function getStoredEmails(inboxAddress: string): Promise<Message[]> {
-    const { storedEmails = {} } = await browser.storage.local.get('storedEmails');
+    const { storedEmails = {} } = await browser.storage.local.get('storedEmails') as any;
     return storedEmails[inboxAddress] || [];
   }
   
   // Clear stored emails for an inbox (useful when deleting inbox)
   async function clearStoredEmails(inboxAddress: string): Promise<void> {
-    const { storedEmails = {} } = await browser.storage.local.get('storedEmails');
+    const { storedEmails = {} } = await browser.storage.local.get('storedEmails') as any;
     delete storedEmails[inboxAddress];
     await browser.storage.local.set({ storedEmails });
     console.log(`Cleared stored emails for ${inboxAddress}`);
@@ -1077,7 +1077,7 @@ export default defineBackground(() => {
   
   // Archive emails when inbox expires (mark them as archived but keep them)
   async function archiveInboxEmails(inboxAddress: string): Promise<void> {
-    const { storedEmails = {}, archivedEmails = {} } = await browser.storage.local.get(['storedEmails', 'archivedEmails']);
+    const { storedEmails = {}, archivedEmails = {} } = await browser.storage.local.get(['storedEmails', 'archivedEmails']) as any;
     
     if (storedEmails[inboxAddress] && storedEmails[inboxAddress].length > 0) {
       // Move emails from active storage to archived storage
@@ -1105,7 +1105,7 @@ export default defineBackground(() => {
   
   // Get archived emails for an inbox
   async function getArchivedEmails(inboxAddress?: string): Promise<Message[]> {
-    const { archivedEmails = {} } = await browser.storage.local.get('archivedEmails');
+    const { archivedEmails = {} } = await browser.storage.local.get('archivedEmails') as any;
     
     if (inboxAddress) {
       return archivedEmails[inboxAddress] || [];
@@ -1123,7 +1123,7 @@ export default defineBackground(() => {
   
   // Cleanup old stored emails (keep only last 30 days for active emails, 90 days for archived)
   async function cleanupOldStoredEmails(): Promise<void> {
-    const { storedEmails = {}, archivedEmails = {} } = await browser.storage.local.get(['storedEmails', 'archivedEmails']);
+    const { storedEmails = {}, archivedEmails = {} } = await browser.storage.local.get(['storedEmails', 'archivedEmails']) as any;
     const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
     const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
     let totalCleaned = 0;
@@ -1191,7 +1191,7 @@ export default defineBackground(() => {
     let messages: Message[] = data.result || [];
     console.log(`Fetched ${messages.length} messages`);
   
-    messages = messages.map(msg => {
+    messages = messages.map((msg: any) => {
       const otp = extractOTP(msg.subject || '', msg.body_html || msg.body_plain || '');
       return {
         ...msg,
@@ -1204,17 +1204,17 @@ export default defineBackground(() => {
   
   // Common function to apply filters and process messages
   async function applyFiltersAndProcessMessages(messages: Message[], filters: EmailFilters, inbox: Inbox): Promise<Message[]> {
-    const { notificationSettings = { enabled: true } }: { notificationSettings: NotificationSettings } = await browser.storage.local.get(['notificationSettings']);
+    const { notificationSettings = { enabled: true } }: { notificationSettings: NotificationSettings } = await browser.storage.local.get(['notificationSettings']) as any;
     
     // Check for new messages by comparing with stored messages
-    const { lastMessageTimestamps = {} }: { lastMessageTimestamps: Record<string, number> } = await browser.storage.local.get(['lastMessageTimestamps']);
+    const { lastMessageTimestamps = {} }: { lastMessageTimestamps: Record<string, number> } = await browser.storage.local.get(['lastMessageTimestamps']) as any;
     const lastTimestamp = lastMessageTimestamps[inbox.id] || 0;
-    const newMessages = messages.filter(msg => msg.received_at * 1000 > lastTimestamp);
+    const newMessages = messages.filter((msg: any) => msg.received_at * 1000 > lastTimestamp);
   
     // Send OTP from new messages to the active tab
     if (newMessages.length > 0) {
       const latestNewMessageWithOtp = newMessages
-        .filter(msg => msg.otp)
+        .filter((msg: any) => msg.otp)
         .sort((a, b) => b.received_at - a.received_at)[0];
       
       if (latestNewMessageWithOtp) {
@@ -1232,13 +1232,13 @@ export default defineBackground(() => {
   
     // Update last message timestamp
     if (messages.length > 0) {
-      lastMessageTimestamps[inbox.id] = Math.max(...messages.map(msg => msg.received_at * 1000));
+      lastMessageTimestamps[inbox.id] = Math.max(...messages.map((msg: any) => msg.received_at * 1000));
       await browser.storage.local.set({ lastMessageTimestamps });
     }
   
     // Send notifications for new messages
     if (notificationSettings.enabled && newMessages.length > 0) {
-      newMessages.forEach(msg => {
+      newMessages.forEach((msg: any) => {
         browser.notifications.create({
           type: 'basic',
           iconUrl: 'icons/icon48.png',
@@ -1249,14 +1249,14 @@ export default defineBackground(() => {
       });
   
       // Update analytics for notifications sent
-      const { analytics = {} } = await browser.storage.local.get(['analytics']);
+      const { analytics = {} } = await browser.storage.local.get(['analytics']) as any;
       analytics.notificationsSent = (analytics.notificationsSent || 0) + newMessages.length;
       await browser.storage.local.set({ analytics });
     }
   
     // Update analytics for emails received and OTPs detected
-    const { analytics = {} }: { analytics: Analytics } = await browser.storage.local.get(['analytics']);
-    const otpCount = messages.filter(msg => msg.otp).length;
+    const { analytics = {} }: { analytics: Analytics } = await browser.storage.local.get(['analytics']) as any;
+    const otpCount = messages.filter((msg: any) => msg.otp).length;
     analytics.otpsDetected = (analytics.otpsDetected || 0) + otpCount;
     await browser.storage.local.set({ analytics });
   
@@ -1266,7 +1266,7 @@ export default defineBackground(() => {
     if (filters.searchQuery && filters.searchQuery.trim()) {
       const query = filters.searchQuery.toLowerCase().trim();
       console.log('Applying search query:', query);
-      filteredMessages = filteredMessages.filter(msg => {
+      filteredMessages = filteredMessages.filter((msg: any) => {
         const subjectMatch = msg.subject && msg.subject.toLowerCase().includes(query);
         const fromMatch = msg.from_name && msg.from_name.toLowerCase().includes(query);
         const bodyMatch = msg.body_plain && msg.body_plain.toLowerCase().includes(query);
@@ -1277,7 +1277,7 @@ export default defineBackground(() => {
   
     if (filters.hasOTP) {
       console.log('Applying OTP filter');
-      filteredMessages = filteredMessages.filter(msg => msg.otp && msg.otp.trim().length > 0);
+      filteredMessages = filteredMessages.filter((msg: any) => msg.otp && msg.otp.trim().length > 0);
       console.log(`After OTP filter: ${filteredMessages.length} messages`);
     }
   
@@ -1292,7 +1292,7 @@ export default defineBackground(() => {
   // Delete an inbox
   async function deleteInbox(inboxId: string, preserveEmails: boolean = true): Promise<DeleteInboxResult> {
     try {
-      const { inboxes = [] }: { inboxes: Inbox[] } = await browser.storage.local.get(['inboxes']);
+      const { inboxes = [] }: { inboxes: Inbox[] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
       const inbox = inboxes.find(i => i.id === inboxId);
       
       if (inbox && inbox.provider === 'guerrilla') {
@@ -1301,16 +1301,16 @@ export default defineBackground(() => {
           await guerrillaApiCall('forget_me', { email_addr: inbox.address });
           // Reset the session state by getting a new address
           await guerrillaApiCall('get_email_address');
-        } catch (error) {
+        } catch (error: any) {
           console.warn('Failed to call forget_me API, proceeding with local deletion:', error);
         }
       }
       // For raceco, we just remove it locally as there's no specific delete API mentioned
   
-      const updatedInboxes = inboxes.filter(i => i.id !== inboxId);
+      const updatedInboxes = inboxes.filter((i: any) => i.id !== inboxId);
       
       // Clean up related data
-      const { seenEmailIds = {}, lastMessageTimestamps = {} } = await browser.storage.local.get(['seenEmailIds', 'lastMessageTimestamps']);
+      const { seenEmailIds = {}, lastMessageTimestamps = {} } = await browser.storage.local.get(['seenEmailIds', 'lastMessageTimestamps']) as any;
       if (inbox) {
         delete seenEmailIds[inbox.address];
         delete lastMessageTimestamps[inboxId];
@@ -1355,8 +1355,8 @@ export default defineBackground(() => {
       throw new Error('Credentials can only be updated from a valid browser tab');
     }
   
-    const { sessionCredentials = {} }: { sessionCredentials: SessionCredentials } = await browser.storage.session.get('sessionCredentials');
-    const { autoCopy = false }: { autoCopy: boolean } = await browser.storage.local.get('autoCopy');
+    const { sessionCredentials = {} }: { sessionCredentials: SessionCredentials } = await browser.storage.session.get('sessionCredentials') as any;
+    const { autoCopy = false }: { autoCopy: boolean } = await browser.storage.local.get('autoCopy') as { autoCopy?: boolean };
   
     const updatedCredentials = { ...sessionCredentials, ...message.credentials };
     await browser.storage.session.set({ sessionCredentials: updatedCredentials });
@@ -1382,7 +1382,7 @@ export default defineBackground(() => {
       phone: 'Phone'
     };
   
-    const formattedFields = fieldOrder.map(fieldKey => {
+    const formattedFields = fieldOrder.map((fieldKey: any) => {
       const fieldValue = credentials[fieldKey];
       if (!fieldValue) {
         return null;
@@ -1405,7 +1405,7 @@ export default defineBackground(() => {
         func: (textToCopy) => navigator.clipboard.writeText(textToCopy),
         args: [text]
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to copy credentials to clipboard:', error);
     }
   }
@@ -1417,13 +1417,13 @@ export default defineBackground(() => {
     if (message.type === 'createInbox') {
       (async () => {
         try {
-          const { selectedProvider = 'burner' } = await browser.storage.local.get(['selectedProvider']);
+          const { selectedProvider = 'burner' } = await browser.storage.local.get(['selectedProvider']) as { selectedProvider?: string };
           const provider = message.provider || selectedProvider;
           const user = message.user || undefined;
           const inbox = await createInbox(provider, user);
           console.log('Inbox created:', inbox);
           sendResponse({ success: true, inbox });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Create inbox failed:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1439,7 +1439,7 @@ export default defineBackground(() => {
           console.log('Emails fetched:', messages.length);
           console.log('Sending response:', { success: true, messages });
           sendResponse({ success: true, messages });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Check emails failed:', error);
           console.log('Sending error response:', { success: false, error: error.message });
           sendResponse({ success: false, error: error.message });
@@ -1454,7 +1454,7 @@ export default defineBackground(() => {
           const result = await deleteInbox(message.inboxId);
           console.log('Delete inbox result:', result);
           sendResponse(result);
-        } catch (error) {
+        } catch (error: any) {
           console.error('Delete inbox failed:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1465,10 +1465,10 @@ export default defineBackground(() => {
     if (message.type === 'getInboxes') {
       (async () => {
         try {
-          const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
+          const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
           console.log('Inboxes retrieved:', inboxes);
           sendResponse({ success: true, inboxes });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Get inboxes failed:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1482,7 +1482,7 @@ export default defineBackground(() => {
           await browser.storage.local.set({ selectedProvider: message.provider });
           console.log('Provider set to:', message.provider);
           sendResponse({ success: true });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Set provider failed:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1493,10 +1493,10 @@ export default defineBackground(() => {
     if (message.type === 'getProvider') {
       (async () => {
         try {
-          const { selectedProvider = 'burner' } = await browser.storage.local.get(['selectedProvider']);
+          const { selectedProvider = 'burner' } = await browser.storage.local.get(['selectedProvider']) as { selectedProvider?: string };
           console.log('Current provider:', selectedProvider);
           sendResponse({ success: true, provider: selectedProvider });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Get provider failed:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1509,7 +1509,7 @@ export default defineBackground(() => {
         try {
           await browser.storage.session.remove('sessionCredentials');
           sendResponse({ success: true });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Failed to clear session credentials:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1522,7 +1522,7 @@ export default defineBackground(() => {
         try {
           const result = await handleUpdateSessionCredentials(message, sender);
           sendResponse(result);
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error updating session credentials:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1533,10 +1533,10 @@ export default defineBackground(() => {
     if (message.type === 'getAnalytics') {
       (async () => {
         try {
-          const { analytics = {} } = await browser.storage.local.get(['analytics']);
+          const { analytics = {} } = await browser.storage.local.get(['analytics']) as any;
           console.log('Analytics retrieved:', analytics);
           sendResponse({ success: true, analytics });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Get analytics failed:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1549,7 +1549,7 @@ export default defineBackground(() => {
         try {
           const archivedEmails = await getArchivedEmails(message.inboxAddress);
           sendResponse({ success: true, archivedEmails });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Get archived emails failed:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1598,7 +1598,7 @@ export default defineBackground(() => {
           console.log('Background alarms re-initialized');
           
           sendResponse({ success: true });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error during background hard reset:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1612,7 +1612,7 @@ export default defineBackground(() => {
         try {
           const instances = await getBurnerInstances();
           sendResponse({ success: true, instances });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error getting Burner instances:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1623,7 +1623,7 @@ export default defineBackground(() => {
     if (message.type === 'renewGuerrillaInbox') {
       (async () => {
         try {
-          const { inboxes = [] } = await browser.storage.local.get(['inboxes']);
+          const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
           const inbox = inboxes.find(i => i.id === message.inboxId);
           
           if (!inbox) {
@@ -1638,7 +1638,7 @@ export default defineBackground(() => {
           
           await autoRenewGuerrillaInbox(inbox);
           sendResponse({ success: true });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error renewing Guerrilla inbox:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1651,7 +1651,7 @@ export default defineBackground(() => {
         try {
           await addCustomBurnerInstance(message.instance);
           sendResponse({ success: true });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error adding custom Burner instance:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1664,7 +1664,7 @@ export default defineBackground(() => {
         try {
           await removeCustomBurnerInstance(message.instanceId);
           sendResponse({ success: true });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error removing custom Burner instance:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1677,7 +1677,7 @@ export default defineBackground(() => {
         try {
           const instance = await getSelectedBurnerInstance();
           sendResponse({ success: true, instance });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error getting selected Burner instance:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1691,7 +1691,7 @@ export default defineBackground(() => {
           console.log('Setting selected burner instance to:', message.instanceId);
           await browser.storage.local.set({ selectedBurnerInstance: message.instanceId });
           sendResponse({ success: true });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error setting selected Burner instance:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1705,7 +1705,7 @@ export default defineBackground(() => {
           console.log('Setting burner instance to:', message.instanceId);
           await browser.storage.local.set({ selectedBurnerInstance: message.instanceId });
           sendResponse({ success: true });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error setting burner instance:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1719,7 +1719,7 @@ export default defineBackground(() => {
           console.log('Initializing default provider');
           await initializeDefaultProvider();
           sendResponse({ success: true });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error initializing default provider:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1734,7 +1734,7 @@ export default defineBackground(() => {
           const data = await guerrillaApiCall(message.func, message.params || {}, 'GET', message.sidToken);
           console.log('guerrillaApiCall response:', data);
           sendResponse({ success: true, data });
-        } catch (error) {
+        } catch (error: any) {
           console.error('guerrillaApiCall failed:', error);
           sendResponse({ success: false, error: error.message });
         }
@@ -1753,7 +1753,7 @@ export default defineBackground(() => {
         if (tab.id) {
           browser.tabs.sendMessage(tab.id, { type: 'autofillForm' });
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error executing autofill command:', error);
       }
     }
