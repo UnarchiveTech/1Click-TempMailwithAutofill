@@ -1,20 +1,30 @@
 import { defineConfig } from 'wxt';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
+  vite: () => ({
+    plugins: [tailwindcss(), svelte()],
+  }),
   manifestVersion: 3,
-  webExt: {
-    // Firefox Windows Store path — WXT passes this to web-ext as the firefox binary.
-    binaries: {
-      firefox: 'C:\\Users\\tejas\\AppData\\Local\\Microsoft\\WindowsApps\\firefox.exe',
-    },
-  },
   srcDir: 'src',
   outDir: '.output',
 
   manifest: {
-    name: '1Click: Temp Mail with Autofill',
-    version: '2.0.0',
+    name: '1Click: Temp Mail & Autofill Form',
+    version: '3.0.0',
     description: 'Generate temporary email addresses and auto-fill OTPs and login forms with one click.',
+    action: {
+      default_popup: 'popup.html',
+      default_icon: 'icons/icon128.png'
+    },
+    icons: {
+      '16': 'icons/icon16.png',
+      '32': 'icons/icon32.png',
+      '48': 'icons/icon48.png',
+      '64': 'icons/icon64.png',
+      '128': 'icons/icon128.png',
+    },
     browser_specific_settings: {
       gecko: {
         id: '1click-temp-mail@unarchive.tech'
@@ -28,15 +38,7 @@ export default defineConfig({
       'scripting',
       'cookies',
     ],
-    icons: {
-      "16": "icons/icon16.png",
-      "32": "icons/icon32.png",
-      "48": "icons/icon48.png",
-      "64": "icons/icon64.png",
-      "128": "icons/icon128.png"
-    },
     host_permissions: ['<all_urls>', 'https://burner.kiwi/*'],
-    // Icons are auto-discovered from src/public/icons/ by WXT
     commands: {
       'autofill-form': {
         suggested_key: {

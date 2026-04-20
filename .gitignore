@@ -1,6 +1,6 @@
 node_modules/
 .output/
 .wxt/
-dist/
+reference/
+llms.txt
 package-lock.json
-*.zip

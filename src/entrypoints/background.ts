@@ -74,6 +74,8 @@ export default defineBackground(() => {
     expiresAt: number;
     expiryNotified?: boolean;
     autoExtend?: boolean; // For per-inbox auto-extend setting
+    tag?: string; // User-defined tag for the inbox
+    archived?: boolean; // Whether inbox has been archived
   }
   
   interface Message {
@@ -430,15 +432,20 @@ export default defineBackground(() => {
     const storage = await browser.storage.local.get(['forceNewSessions']) as any;
     const shouldForceNewSession = storage.forceNewSessions === true;
     
+    // Always use credentials: 'omit' for get_email_address to create fresh sessions
+    // This allows creating multiple Guerrilla addresses like curl does
+    const isGetEmailAddress = func === 'get_email_address';
+    const useOmitCredentials = shouldForceNewSession || isGetEmailAddress;
+    
     // Use credentials: 'omit' for fresh sessions, and add cache-busting for get_email_address
     const fetchOptions: RequestInit = {
       method: method,
-      credentials: shouldForceNewSession ? 'omit' : 'include',
-      cache: shouldForceNewSession ? 'no-cache' : 'default',
+      credentials: useOmitCredentials ? 'omit' : 'include',
+      cache: useOmitCredentials ? 'no-cache' : 'default',
     };
     
-    // Add headers to break persistent connections when forcing new sessions
-    if (shouldForceNewSession) {
+    // Add headers to break persistent connections when forcing new sessions or for get_email_address
+    if (useOmitCredentials) {
       fetchOptions.headers = {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
@@ -447,8 +454,8 @@ export default defineBackground(() => {
       };
     }
     
-    // Add multiple cache-busting and session-breaking parameters when forcing new sessions
-    if (shouldForceNewSession && func === 'get_email_address') {
+    // Add multiple cache-busting and session-breaking parameters when forcing new sessions or for get_email_address
+    if (useOmitCredentials && func === 'get_email_address') {
       urlParams.append('_t', Date.now().toString());
       urlParams.append('_r', Math.random().toString(36).substring(7));
       urlParams.append('_fresh', '1');
@@ -612,7 +619,6 @@ export default defineBackground(() => {
         if (hasExistingGuerrillaInboxes) {
           console.log('Found existing Guerrilla inboxes, forcing fresh session to avoid duplicates');
           // Force fresh session by using no-cache credentials
-          forceNoCache = true;
         }
         
         // Get email data from Guerrilla Mail API - always use get_email_address
@@ -706,69 +712,56 @@ export default defineBackground(() => {
         if (activeProvider === 'guerrilla') {
           // For Guerrilla Mail, if we get a duplicate, it means the API returned an existing address
           // This can happen after extension restart due to session persistence
-          // Instead of throwing an error, we should reuse the existing inbox if it's still valid
           const now = Date.now();
           const isExpired = existingInbox.expiresAt && now > existingInbox.expiresAt;
           
-          if (!isExpired) {
+          if (!isExpired && !existingInbox.archived) {
             console.log('Reusing existing valid Guerrilla Mail inbox:', existingInbox.address);
-            // Update the existing inbox with the new session token if provided
-            if (inbox.sidToken) {
-              existingInbox.sidToken = inbox.sidToken;
-              console.log('Updated existing inbox with new sidToken:', inbox.sidToken);
-              
-              // Update the inbox in storage
-              const inboxIndex = inboxes.findIndex((i: any) => i.address === existingInbox.address);
-              if (inboxIndex !== -1) {
-                inboxes[inboxIndex] = existingInbox;
-                await browser.storage.local.set({ inboxes });
+            // Update the existing inbox with the new session token
+            const inboxIndex = inboxes.findIndex((i: any) => i.address === existingInbox.address);
+            if (inboxIndex !== -1) {
+              if (inbox.sidToken) {
+                inboxes[inboxIndex].sidToken = inbox.sidToken;
+                console.log('Updated existing inbox with new sidToken:', inbox.sidToken);
               }
+              await browser.storage.local.set({ inboxes });
             }
-            return existingInbox;
+            return inboxes[inboxIndex] || existingInbox;
           } else {
-             console.log('Existing inbox is expired, removing it and creating new one');
-             // Remove the expired inbox and continue with creating a new one
-             const updatedInboxes = inboxes.filter((i: any) => i.address !== existingInbox.address);
-             await browser.storage.local.set({ inboxes: updatedInboxes });
-             // Update the local inboxes array for the rest of this function
-             inboxes.length = 0;
-             inboxes.push(...updatedInboxes);
-           }
-        } else if (activeProvider === 'guerrilla') {
-          // If we still get a duplicate for Guerrilla Mail after all checks, try to get a fresh address
-          console.log('Guerrilla Mail returned duplicate address, attempting to get fresh address');
-          try {
-            // Force a completely fresh session by calling forget_me first, then get new address
-            await guerrillaApiCall('forget_me', { email_addr: inbox.address });
-            console.log('Called forget_me for duplicate address, now getting fresh address');
-            
-            // Get a completely new address
-            const freshData = await guerrillaApiCall('get_email_address');
-            if (freshData.email_addr && freshData.email_addr !== inbox.address) {
-              console.log('Successfully got fresh address:', freshData.email_addr);
-              // Update the inbox object with fresh data
-              inbox.address = freshData.email_addr;
-              inbox.id = freshData.email_addr;
-              inbox.sidToken = freshData.sid_token;
-              inbox.expiresAt = (freshData.email_timestamp + 3600) * 1000;
+            // Expired or archived — call forget_me and get a completely fresh address
+            console.log('Existing inbox is expired/archived, calling forget_me to get fresh address');
+            try {
+              await guerrillaApiCall('forget_me', { email_addr: inbox.address });
+              console.log('Called forget_me, now getting fresh address');
               
-              // Check again if this new address is a duplicate
-              const stillDuplicate = inboxes.find(i => i.address === inbox.address);
-              if (!stillDuplicate) {
-                console.log('Fresh address is unique, proceeding with creation');
+              const freshData = await guerrillaApiCall('get_email_address');
+              if (freshData.email_addr && freshData.email_addr !== inbox.address) {
+                console.log('Successfully got fresh address:', freshData.email_addr);
+                inbox.address = freshData.email_addr;
+                inbox.id = freshData.email_addr;
+                inbox.sidToken = freshData.sid_token;
+                inbox.expiresAt = (freshData.email_timestamp + 3600) * 1000;
+                
+                const stillDuplicate = inboxes.find((i: any) => i.address === inbox.address && !i.archived);
+                if (stillDuplicate) {
+                  throw new Error('Unable to create unique Guerrilla Mail inbox. Multiple attempts returned existing addresses.');
+                }
+                // Remove the old expired/archived entry
+                const cleaned = inboxes.filter((i: any) => i.address !== existingInbox.address);
+                await browser.storage.local.set({ inboxes: cleaned });
+                inboxes.length = 0;
+                inboxes.push(...cleaned);
               } else {
-                console.log('Fresh address is still duplicate, this indicates a deeper session issue');
-                throw new Error(`Unable to create unique Guerrilla Mail inbox. Multiple attempts returned existing addresses. Please use the hard reset button to clear all session data.`);
+                throw new Error('Failed to get fresh email address from Guerrilla Mail');
               }
-            } else {
-              throw new Error('Failed to get fresh email address from Guerrilla Mail');
+            } catch (forgetError: any) {
+              console.error('Error during forget_me call:', forgetError);
+              throw new Error(`Unable to create new inbox: Guerrilla Mail session conflict. ${forgetError.message}`);
             }
-          } catch (forgetError) {
-            console.error('Error during forget_me call:', forgetError);
-            throw new Error(`Unable to create new inbox: Guerrilla Mail session conflict. Please use the hard reset button to clear all session data.`);
           }
-        } else {
-          throw new Error(`Inbox with address ${inbox.address} already exists`);
+        } else if (activeProvider === 'burner') {
+          // For Burner.kiwi, throw error on duplicate
+          throw new Error('Inbox with this address already exists');
         }
       }
   
@@ -1484,6 +1477,51 @@ export default defineBackground(() => {
           sendResponse({ success: true });
         } catch (error: any) {
           console.error('Set provider failed:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    if (message.type === 'updateInboxTag') {
+      (async () => {
+        try {
+          const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
+          const inboxIndex = inboxes.findIndex(i => i.id === message.inboxId);
+          if (inboxIndex === -1) {
+            sendResponse({ success: false, error: 'Inbox not found' });
+            return;
+          }
+          inboxes[inboxIndex].tag = message.tag;
+          await browser.storage.local.set({ inboxes });
+          console.log('Tag updated for inbox:', message.inboxId, 'tag:', message.tag);
+          sendResponse({ success: true });
+        } catch (error: any) {
+          console.error('Update tag failed:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    if (message.type === 'archiveInbox') {
+      (async () => {
+        try {
+          const { inboxes = [] } = await browser.storage.local.get(['inboxes']) as { inboxes?: Inbox[] };
+          const inbox = inboxes.find(i => i.id === message.inboxId);
+          if (!inbox) {
+            sendResponse({ success: false, error: 'Inbox not found' });
+            return;
+          }
+          // Archive emails for this inbox
+          await archiveInboxEmails(inbox.address);
+          // Mark inbox as archived
+          const updatedInboxes = inboxes.map(i => i.id === message.inboxId ? { ...i, archived: true } : i);
+          await browser.storage.local.set({ inboxes: updatedInboxes });
+          console.log('Inbox archived:', message.inboxId);
+          sendResponse({ success: true });
+        } catch (error: any) {
+          console.error('Archive inbox failed:', error);
           sendResponse({ success: false, error: error.message });
         }
       })();

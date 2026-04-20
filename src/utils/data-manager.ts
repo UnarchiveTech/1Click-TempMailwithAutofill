@@ -1,65 +1,23 @@
-﻿// Type definitions
-interface EmailHistoryItem {
-  email: string;
-  timestamp: number;
-  [key: string]: any;
-}
+import type { ExportData, ExportResult, ImportResult } from './types.js';
 
-interface CredentialsHistoryItem {
-  domain: string;
-  username: string;
-  timestamp: number;
-  [key: string]: any;
-}
-
-interface Inbox {
-  id: string;
-  email: string;
-  createdAt: number;
-  expiresAt: number;
-}
-
-interface ExportData {
-  version: string;
-  exportDate: string;
-  data: {
-    emailHistory: EmailHistoryItem[];
-    credentialsHistory: CredentialsHistoryItem[];
-    settings: {
-      darkMode: boolean;
-      activeInboxId?: string;
-    };
-    inboxes: Inbox[];
-  };
-}
-
-interface ExportResult {
-  success: boolean;
-  error?: string;
-}
-
-interface ImportResult {
-  success: boolean;
-  error?: string;
-}
-
-interface DataManager {
-  exportData: () => Promise<ExportResult>;
-  importData: (file: File) => Promise<ImportResult>;
-}
+// WXT provides 'browser' global; fall back to chrome in non-WXT contexts
+declare const browser: any;
+declare const chrome: any;
+const _ext: any = typeof browser !== 'undefined' ? browser : chrome;
 
 async function exportData(): Promise<ExportResult> {
   try {
-    const { emailHistory = [], credentialsHistory = [], darkMode = false, inboxes = [], activeInboxId } = await chrome.storage.local.get(['emailHistory', 'credentialsHistory', 'darkMode', 'inboxes', 'activeInboxId']) as {
-      emailHistory: EmailHistoryItem[];
-      credentialsHistory: CredentialsHistoryItem[];
-      darkMode: boolean;
-      inboxes: Inbox[];
+    const raw = await _ext.storage.local.get(['emailHistory', 'credentialsHistory', 'darkMode', 'inboxes', 'activeInboxId']) as {
+      emailHistory?: any[];
+      credentialsHistory?: any[];
+      darkMode?: boolean;
+      inboxes?: any[];
       activeInboxId?: string;
     };
+    const { emailHistory = [], credentialsHistory = [], darkMode = false, inboxes = [], activeInboxId } = raw;
     
     const exportData: ExportData = {
-      version: '1.0',
+      version: '3.0',
       exportDate: new Date().toISOString(),
       data: {
         emailHistory,
@@ -105,8 +63,8 @@ async function importData(file: File): Promise<ImportResult> {
       throw new Error('Invalid data format in backup file');
     }
     
-    const { emailHistory: existingEmails = [], credentialsHistory: existingCreds = [], inboxes: existingInboxes = [] } = 
-      await chrome.storage.local.get(['emailHistory', 'credentialsHistory', 'inboxes']);
+    const raw2 = await _ext.storage.local.get(['emailHistory', 'credentialsHistory', 'inboxes']) as { emailHistory?: any[]; credentialsHistory?: any[]; inboxes?: any[] };
+    const { emailHistory: existingEmails = [], credentialsHistory: existingCreds = [], inboxes: existingInboxes = [] } = raw2;
     
     const mergedEmails = [...existingEmails];
     emailHistory.forEach((newEmail: any) => {
@@ -131,12 +89,13 @@ async function importData(file: File): Promise<ImportResult> {
       }
     });
     
-    await chrome.storage.local.set({
+    const s = settings as { darkMode?: boolean; activeInboxId?: string };
+    await _ext.storage.local.set({
       emailHistory: mergedEmails,
       credentialsHistory: mergedCreds,
       inboxes: mergedInboxes,
-      darkMode: settings.darkMode,
-      activeInboxId: settings.activeInboxId
+      darkMode: s.darkMode,
+      activeInboxId: s.activeInboxId
     });
     
     return { success: true };
@@ -148,7 +107,10 @@ async function importData(file: File): Promise<ImportResult> {
 
 declare global {
   interface Window {
-    dataManager: DataManager;
+    dataManager: {
+      exportData: () => Promise<ExportResult>;
+      importData: (file: File) => Promise<ImportResult>;
+    };
   }
 }
 
@@ -156,3 +118,5 @@ window.dataManager = {
   exportData,
   importData
 };
+
+export { exportData, importData };

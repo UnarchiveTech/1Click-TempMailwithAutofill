@@ -1,9 +1,3 @@
-import '@types/webextension-polyfill';
-
-declare module 'webextension-polyfill' {
-  namespace browser.storage {
-    interface StorageArea {
-      get(keys?: any): Promise<any>;
-    }
-  }
-}
+// WXT provides browser and chrome globals
+declare const browser: any;
+declare const chrome: any;

@@ -24,7 +24,7 @@ export default defineContentScript({
                 type: 'updateSessionCredentials',
                 credentials: credentialsToUpdate
             });
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error sending update credentials message:', error);
         }
     }
@@ -44,13 +44,13 @@ export default defineContentScript({
         if (!isSignupForm) return false;
     
         const inputs = form.querySelectorAll('input');
-        const hasEmailField = Array.from(inputs).some((input: any) => 
+        const hasEmailField = Array.from(inputs).some((input: HTMLInputElement) => 
           input.type === 'email' || 
           input.name.toLowerCase().includes('email') ||
           input.id.toLowerCase().includes('email') ||
           input.placeholder?.toLowerCase().includes('email')
         );
-        const hasPasswordField = Array.from(inputs).some((input: any) => 
+        const hasPasswordField = Array.from(inputs).some((input: HTMLInputElement) => 
           input.type === 'password' || 
           input.name.toLowerCase().includes('password') ||
           input.id.toLowerCase().includes('password') ||
@@ -66,13 +66,13 @@ export default defineContentScript({
     
       for (const form of forms) {
         const inputs = form.querySelectorAll('input');
-        const hasEmailField = Array.from(inputs).some((input: any) => 
+        const hasEmailField = Array.from(inputs).some((input: HTMLInputElement) => 
           input.type === 'email' || 
           input.name.toLowerCase().includes('email') ||
           input.id.toLowerCase().includes('email') ||
           input.placeholder?.toLowerCase().includes('email')
         );
-        const hasPasswordField = Array.from(inputs).some((input: any) => 
+        const hasPasswordField = Array.from(inputs).some((input: HTMLInputElement) => 
           input.type === 'password' || 
           input.name.toLowerCase().includes('password') ||
           input.id.toLowerCase().includes('password') ||
@@ -102,7 +102,7 @@ export default defineContentScript({
         if (!isLikelySignupForm) continue;
         
         const inputs = form.querySelectorAll('input');
-        const hasEmailField = Array.from(inputs).some((input: any) => 
+        const hasEmailField = Array.from(inputs).some((input: HTMLInputElement) => 
           input.type === 'email' || 
           input.name.toLowerCase().includes('email') ||
           input.id.toLowerCase().includes('email') ||
@@ -118,7 +118,7 @@ export default defineContentScript({
     
       for (const form of forms) {
         const inputs = form.querySelectorAll('input');
-        const hasEmailField = Array.from(inputs).some((input: any) => 
+        const hasEmailField = Array.from(inputs).some((input: HTMLInputElement) => 
           input.type === 'email' || 
           input.name.toLowerCase().includes('email') ||
           input.id.toLowerCase().includes('email') ||
@@ -142,68 +142,83 @@ export default defineContentScript({
       // Helper to make SVGs non-interactive to clicks, ensuring the button always gets the event.
       const svgStyle = 'style="pointer-events: none;"';
     
-      inputFields.forEach((inputField: any) => {
+      inputFields.forEach((inputField: HTMLInputElement | HTMLSelectElement) => {
         const isSelect = inputField.tagName.toLowerCase() === 'select';
-        const isCheckbox = inputField.type === 'checkbox';
+        const isCheckbox = !isSelect && (inputField as HTMLInputElement).type === 'checkbox';
+        const isInput = !isSelect;
     
-        const isEmail = inputField.type === 'email' || 
-                       inputField.name.toLowerCase().includes('email') || 
-                       inputField.id.toLowerCase().includes('email') || 
-                       inputField.placeholder?.toLowerCase().includes('email');
+        const isEmail = isInput && (
+            (inputField as HTMLInputElement).type === 'email' || 
+            inputField.name.toLowerCase().includes('email') || 
+            inputField.id.toLowerCase().includes('email') || 
+            (inputField as HTMLInputElement).placeholder?.toLowerCase().includes('email')
+        );
     
-        const isPassword = inputField.type === 'password' || 
-                         inputField.name.toLowerCase().includes('password') || 
-                         inputField.id.toLowerCase().includes('password') || 
-                         inputField.placeholder?.toLowerCase().includes('password');
+        const isPassword = isInput && (
+            (inputField as HTMLInputElement).type === 'password' || 
+            inputField.name.toLowerCase().includes('password') || 
+            inputField.id.toLowerCase().includes('password') || 
+            (inputField as HTMLInputElement).placeholder?.toLowerCase().includes('password')
+        );
     
-        const isPhone = inputField.type === 'tel' ||
-                      inputField.name.toLowerCase().includes('phone') ||
-                      inputField.id.toLowerCase().includes('phone') ||
-                      inputField.name.toLowerCase().includes('mobile') ||
-                      inputField.id.toLowerCase().includes('mobile') ||
-                      inputField.placeholder?.toLowerCase().includes('phone') ||
-                      inputField.placeholder?.toLowerCase().includes('mobile');
+        const isPhone = isInput && (
+            (inputField as HTMLInputElement).type === 'tel' ||
+            inputField.name.toLowerCase().includes('phone') ||
+            inputField.id.toLowerCase().includes('phone') ||
+            inputField.name.toLowerCase().includes('mobile') ||
+            inputField.id.toLowerCase().includes('mobile') ||
+            (inputField as HTMLInputElement).placeholder?.toLowerCase().includes('phone') ||
+            (inputField as HTMLInputElement).placeholder?.toLowerCase().includes('mobile')
+        );
     
-        const isUsername = inputField.name.toLowerCase().includes('username') || 
-                         inputField.id.toLowerCase().includes('username') || 
-                         inputField.name.toLowerCase().includes('userid') || 
-                         inputField.id.toLowerCase().includes('userid') || 
-                         inputField.name.toLowerCase().includes('login') || 
-                         inputField.id.toLowerCase().includes('login') || 
-                         inputField.placeholder?.toLowerCase().includes('username') || 
-                         inputField.placeholder?.toLowerCase().includes('user id') || 
-                         inputField.placeholder?.toLowerCase().includes('login');
+        const isUsername = isInput && (
+            inputField.name.toLowerCase().includes('username') || 
+            inputField.id.toLowerCase().includes('username') || 
+            inputField.name.toLowerCase().includes('userid') || 
+            inputField.id.toLowerCase().includes('userid') || 
+            inputField.name.toLowerCase().includes('login') || 
+            inputField.id.toLowerCase().includes('login') || 
+            (inputField as HTMLInputElement).placeholder?.toLowerCase().includes('username') || 
+            (inputField as HTMLInputElement).placeholder?.toLowerCase().includes('user id') || 
+            (inputField as HTMLInputElement).placeholder?.toLowerCase().includes('login')
+        );
     
-        const isFirstName = inputField.name.toLowerCase().includes('firstname') ||
-                          inputField.id.toLowerCase().includes('firstname') ||
-                          inputField.name.toLowerCase().includes('fname') ||
-                          inputField.id.toLowerCase().includes('fname') ||
-                          inputField.placeholder?.toLowerCase().includes('first name');
+        const isFirstName = isInput && (
+            inputField.name.toLowerCase().includes('firstname') ||
+            inputField.id.toLowerCase().includes('firstname') ||
+            inputField.name.toLowerCase().includes('fname') ||
+            inputField.id.toLowerCase().includes('fname') ||
+            (inputField as HTMLInputElement).placeholder?.toLowerCase().includes('first name')
+        );
     
-        const isLastName = inputField.name.toLowerCase().includes('lastname') ||
-                         inputField.id.toLowerCase().includes('lastname') ||
-                         inputField.name.toLowerCase().includes('lname') ||
-                         inputField.id.toLowerCase().includes('lname') ||
-                         inputField.placeholder?.toLowerCase().includes('last name');
+        const isLastName = isInput && (
+            inputField.name.toLowerCase().includes('lastname') ||
+            inputField.id.toLowerCase().includes('lastname') ||
+            inputField.name.toLowerCase().includes('lname') ||
+            inputField.id.toLowerCase().includes('lname') ||
+            (inputField as HTMLInputElement).placeholder?.toLowerCase().includes('last name')
+        );
     
-        const isFullName = (
+        const isFullName = isInput && (
             inputField.name.toLowerCase().includes('fullname') ||
             inputField.id.toLowerCase().includes('fullname') ||
-            inputField.placeholder?.toLowerCase().includes('full name') ||
+            (inputField as HTMLInputElement).placeholder?.toLowerCase().includes('full name') ||
             (
-                (inputField.name.toLowerCase().includes('name') || inputField.id.toLowerCase().includes('name') || inputField.placeholder?.toLowerCase().includes('name')) &&
-                !inputField.name.toLowerCase().includes('username') && !inputField.id.toLowerCase().includes('username') && !inputField.placeholder?.toLowerCase().includes('username') &&
+                (inputField.name.toLowerCase().includes('name') || inputField.id.toLowerCase().includes('name') || (inputField as HTMLInputElement).placeholder?.toLowerCase().includes('name')) &&
+                !inputField.name.toLowerCase().includes('username') && !inputField.id.toLowerCase().includes('username') && !(inputField as HTMLInputElement).placeholder?.toLowerCase().includes('username') &&
                 !isFirstName && !isLastName
             )
         );
     
-        const isWebsite = inputField.type === 'url' ||
-                        inputField.name.toLowerCase().includes('website') ||
-                        inputField.id.toLowerCase().includes('website') ||
-                        inputField.placeholder?.toLowerCase().includes('website') ||
-                        inputField.name.toLowerCase().includes('url') ||
-                        inputField.id.toLowerCase().includes('url') ||
-                        inputField.placeholder?.toLowerCase().includes('url');
+        const isWebsite = isInput && (
+            (inputField as HTMLInputElement).type === 'url' ||
+            inputField.name.toLowerCase().includes('website') ||
+            inputField.id.toLowerCase().includes('website') ||
+            (inputField as HTMLInputElement).placeholder?.toLowerCase().includes('website') ||
+            inputField.name.toLowerCase().includes('url') ||
+            inputField.id.toLowerCase().includes('url') ||
+            (inputField as HTMLInputElement).placeholder?.toLowerCase().includes('url')
+        );
     
         let iconSvg;
         if (isEmail) {
@@ -390,9 +405,10 @@ export default defineContentScript({
                 await updateAndCopyCredentials(credentialsToUpdate);
             }
     
-          } catch (error: any) {
+          } catch (error: unknown) {
             console.error('Error filling field:', error);
-            showTooltip(autoFillButton, 'Error: ' + error.message, true);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            showTooltip(autoFillButton, 'Error: ' + errorMessage, true);
           }
         });
     
@@ -486,9 +502,10 @@ export default defineContentScript({
                 isError: true 
               });
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             browser.runtime.sendMessage({ 
-              status: 'Error during signup process: ' + error.message, 
+              status: 'Error during signup process: ' + errorMessage, 
               isError: true 
             });
           }
@@ -499,6 +516,18 @@ export default defineContentScript({
       if (message.type === 'fillOTP') {
         fillOtp(message.otp);
         sendResponse({ success: true });
+        return true;
+      }
+      
+      if (message.type === 'checkFormDetected') {
+        (async () => {
+          try {
+            const form = await findSignupForm();
+            sendResponse({ formDetected: !!form });
+          } catch {
+            sendResponse({ formDetected: false });
+          }
+        })();
         return true;
       }
     });
@@ -519,7 +548,7 @@ export default defineContentScript({
     }
     
     function removeInjectedButtons() {
-      injectedButtons.forEach((button: any) => {
+      injectedButtons.forEach((button: HTMLElement) => {
         if (button.parentNode) {
           button.parentNode.removeChild(button);
         }
@@ -600,9 +629,10 @@ export default defineContentScript({
           } else {
             showTooltip(fillAllButton, 'Failed to fill form', true);
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error('Error filling form:', error);
-          showTooltip(fillAllButton, 'Error: ' + error.message, true);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          showTooltip(fillAllButton, 'Error: ' + errorMessage, true);
         }
       });
     
@@ -628,7 +658,7 @@ export default defineContentScript({
         if (form) {
           injectAutoFillButtons(form);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Error scanning for forms:', error);
       }
     }
@@ -637,10 +667,10 @@ export default defineContentScript({
       setTimeout(scanForFormsAndInjectButtons, 1000);
     });
     
-    const observer = new MutationObserver((mutations) => {
-      const mightHaveAddedForm = mutations.some((mutation: any) => {
+    const observer = new MutationObserver((mutations: MutationRecord[]) => {
+      const mightHaveAddedForm = mutations.some((mutation: MutationRecord) => {
         return mutation.addedNodes.length > 0 && 
-               Array.from(mutation.addedNodes).some((node: any) => 
+               Array.from(mutation.addedNodes).some((node: Node) => 
                  node.nodeName === 'FORM' || 
                  (node.nodeType === 1 && node.querySelector('form, input[type="email"]'))
                );
@@ -654,6 +684,12 @@ export default defineContentScript({
     observer.observe(document.body, {
       childList: true,
       subtree: true
+    });
+    
+    // Disconnect observer on page unload to prevent memory leak
+    window.addEventListener('unload', () => {
+      observer.disconnect();
+      removeInjectedButtons();
     });
     
     function generatePassword() {
@@ -791,7 +827,7 @@ export default defineContentScript({
         }
     
         const selectElements = form.querySelectorAll('select');
-        selectElements.forEach((select: any) => {
+        selectElements.forEach((select: HTMLSelectElement) => {
           fillSelectElement(select);
           select.dispatchEvent(new Event('input', { bubbles: true }));
           select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -811,7 +847,7 @@ export default defineContentScript({
         
         const passwordInputs = form.querySelectorAll('input[type="password"], input[name*="password"], input[id*="password"]');
         
-        passwordInputs.forEach((input: any) => {
+        passwordInputs.forEach((input: HTMLInputElement) => {
           input.value = password;
           input.dispatchEvent(new Event('input', { bubbles: true }));
           input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -858,7 +894,7 @@ export default defineContentScript({
         await browser.storage.local.set({ credentialsHistory });
     
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Error filling form:', error);
         return false;
       }
@@ -866,7 +902,7 @@ export default defineContentScript({
     
     function fillSelectElement(selectElement) {
       const options = Array.from(selectElement.options);
-      const validOptions = options.filter((option: any) => 
+      const validOptions = options.filter((option: HTMLOptionElement) => 
         !option.disabled && 
         option.value && 
         option.value.trim() !== '' && 
@@ -892,7 +928,7 @@ export default defineContentScript({
         // Heuristics to find OTP inputs
         const keywords = ['otp', 'verification', 'code', 'pin', '2fa', 'two-factor', 'totp', 'mfa'];
         
-        const visibleInputs = Array.from(inputs).filter((input: any) => {
+        const visibleInputs = Array.from(inputs).filter((input: HTMLInputElement) => {
             if (input.type === 'hidden' || input.disabled || input.readOnly) return false;
             const rect = input.getBoundingClientRect();
             return rect.width > 0 && rect.height > 0;
