@@ -25,7 +25,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build extension for ${{ matrix.browser }}
         run: npx wxt build --browser ${{ matrix.browser }}
