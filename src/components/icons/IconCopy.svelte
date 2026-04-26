@@ -1,5 +1,5 @@
 <script lang="ts">
-  let { class: cls = '' } = $props<{ class?: string }>();
+let { class: cls = '' } = $props<{ class?: string }>();
 </script>
 <svg xmlns="http://www.w3.org/2000/svg" class={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>

@@ -64,11 +64,11 @@ export interface BurnerInstanceResponse {
 // ---- Storage Data Structures ----
 
 export interface StoredEmails {
-  [inboxAddress: string]: Message[];
+  [inboxAddress: string]: Email[];
 }
 
 export interface ArchivedEmails {
-  [inboxAddress: string]: Message[];
+  [inboxAddress: string]: Email[];
 }
 
 export interface LastMessageTimestamps {
@@ -90,6 +90,10 @@ export interface NameSettings {
   lastName?: string;
 }
 
+export interface DeveloperSettings {
+  enableLogging: boolean;
+}
+
 export interface StoredSettings {
   passwordSettings?: PasswordSettings;
   nameSettings?: NameSettings;
@@ -100,6 +104,7 @@ export interface StoredSettings {
   customBurnerInstances?: BurnerInstance[];
   notificationSettings?: NotificationSettings;
   themeMode?: 'light' | 'dark' | 'system';
+  developerSettings?: DeveloperSettings;
 }
 
 export interface ProviderConfig {
@@ -119,78 +124,55 @@ export interface BurnerInstance {
 
 export interface Analytics {
   createdAt?: number;
-  inboxesCreated?: number;
+  accountsCreated?: number;
   emailsReceived?: number;
   otpsDetected?: number;
   notificationsSent?: number;
 }
 
-export interface Inbox {
-  id: string;
-  /** The full email address, e.g. "foo@bar.com" */
-  address: string;
-  token?: string;        // For burner.kiwi — bearer token
-  sidToken?: string;     // For guerrilla — per-inbox session token
-  lastSequence?: number; // For guerrilla — highest mail_id seen
-  provider: MailProvider;
-  createdAt: number;     // ms timestamp
-  expiresAt: number;     // ms timestamp
-  expiryNotified?: boolean;
-  autoExtend?: boolean;
-  archived?: boolean;
-}
-
-export interface Message {
-  id: string;
-  subject?: string;
-  body_html?: string;
-  body_plain?: string;
-  from_name?: string;
-  received_at: number;   // Unix seconds
-  otp?: string;
-  stored_at?: number;    // ms timestamp (when we stored it)
-  archived?: boolean;
-  archived_at?: number;
-  original_inbox?: string;
-}
-
-// ---- UI Component Types ----
-
-export interface Email {
-  id: string;
-  subject: string;
-  from: string;
-  time: string;
-  isOtp: boolean;
-  otp: string | null;
-  body: string;
-  body_html?: string;
-  unread: boolean;
-  received_at: number;
-}
+// ---- Domain Types ----
 
 export interface Account {
   id: string;
+  /** The full email address, e.g. "foo@bar.com" */
   address: string;
   provider: MailProvider;
-  expiry: string;
-  autoExtend: boolean;
-  received: number;
-  lastUsed: string;
-  sidToken?: string;
+  token?: string; // For burner.kiwi — bearer token
+  sidToken?: string; // For guerrilla — per-inbox session token
+  lastSequence?: number; // For guerrilla — highest mail_id seen
+  createdAt: number; // ms timestamp
+  expiresAt: number; // ms timestamp
+  expiryNotified?: boolean;
+  autoExtend?: boolean;
+  tag?: string;
+  archived?: boolean;
+  // UI-specific properties
+  expiry?: string; // Formatted expiry string
+  received?: number; // Email count
+  lastUsed?: string; // Formatted last used string
+  status?: string; // Formatted status string
   emailUser?: string;
 }
 
-export interface ArchivedEmail {
+export interface Email {
   id: string;
-  subject: string;
-  from: string;
-  date: string;
-  otp: string;
+  subject?: string;
+  body?: string;
   body_html?: string;
   body_plain?: string;
-  received_at: number;
-  archived_at: number;
+  from?: string;
+  from_name?: string;
+  received_at: number; // Unix seconds
+  otp?: string | null;
+  archived?: boolean;
+  archived_at?: number;
+  stored_at?: number; // ms timestamp (when we stored it)
+  original_inbox?: string;
+  // UI-specific properties
+  time?: string; // Formatted time string
+  isOtp?: boolean;
+  unread?: boolean;
+  date?: string; // Formatted date string
 }
 
 export interface SavedLogin {
@@ -284,10 +266,10 @@ export interface FilterListProps {
 export interface ArchivedEmailsProps {
   onBack: () => void;
   archivedSearch: string;
-  filteredArchivedEmails: ArchivedEmail[];
+  filteredArchivedEmails: Email[];
   onSearchChange: (value: string) => void;
-  onRestore: (email: ArchivedEmail) => void;
-  onDelete: (email: ArchivedEmail) => void;
+  onRestore: (email: Email) => void;
+  onDelete: (email: Email) => void;
   onClearSearch: () => void;
 }
 
@@ -353,8 +335,14 @@ export interface EmailHistoryItem {
 
 export interface CredentialsHistoryItem {
   domain: string;
-  username: string;
   timestamp: number;
+  email?: string | null;
+  username?: string | null;
+  name?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  password?: string;
+  inboxId?: string;
   [key: string]: unknown;
 }
 
@@ -366,9 +354,9 @@ export interface ExportData {
     credentialsHistory: CredentialsHistoryItem[];
     settings: {
       darkMode: boolean;
-      activeInboxId?: string;
+      activeAccountId?: string;
     };
-    inboxes: Inbox[];
+    accounts: Account[];
   };
 }
 
@@ -408,5 +396,36 @@ export type BackgroundMessage =
   | { action: 'setSelectedBurnerInstance'; instanceId: string }
   | { action: 'setBurnerInstance'; instanceId: string }
   | { action: 'initializeDefaultProvider' }
-  | { action: 'guerrillaApiCall'; func: string; params?: Record<string, unknown>; sidToken?: string }
+  | {
+      action: 'guerrillaApiCall';
+      func: string;
+      params?: Record<string, unknown>;
+      sidToken?: string;
+    }
   | { action: 'getArchivedEmails'; inboxAddress?: string };
+
+// ---- Browser Runtime Types ----
+
+export interface RuntimeMessageSender {
+  id?: string;
+  url?: string;
+  tab?: {
+    id: number;
+    url?: string;
+  };
+  frameId?: number;
+}
+
+export type MessageResponse = unknown;
+
+export interface Alarm {
+  name: string;
+  scheduledTime: number;
+  periodInMinutes?: number;
+}
+
+export interface Tab {
+  id: number;
+  url?: string;
+  title?: string;
+}

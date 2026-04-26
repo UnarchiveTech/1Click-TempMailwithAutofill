@@ -1,10 +1,15 @@
-import { defineConfig } from 'wxt';
-import { svelte } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
+import { defineConfig } from 'wxt';
 
 export default defineConfig({
+  modules: ['@wxt-dev/module-svelte'],
   vite: () => ({
-    plugins: [tailwindcss(), svelte()],
+    plugins: [tailwindcss()],
+    resolve: {
+      alias: {
+        '@': '/src',
+      },
+    },
   }),
   manifestVersion: 3,
   srcDir: 'src',
@@ -13,10 +18,11 @@ export default defineConfig({
   manifest: {
     name: '1Click: Temp Mail & Autofill Form',
     version: '3.0.0',
-    description: 'Generate temporary email addresses and auto-fill OTPs and login forms with one click.',
+    description:
+      'Generate temporary email addresses and auto-fill OTPs and login forms with one click.',
     action: {
       default_popup: 'popup.html',
-      default_icon: 'icons/icon128.png'
+      default_icon: 'icons/icon128.png',
     },
     icons: {
       '16': 'icons/icon16.png',
@@ -27,18 +33,14 @@ export default defineConfig({
     },
     browser_specific_settings: {
       gecko: {
-        id: '1click-temp-mail@unarchive.tech'
-      }
+        id: '1click-temp-mail@unarchive.tech',
+      },
     },
-    permissions: [
-      'storage',
-      'alarms',
-      'notifications',
-      'clipboardWrite',
-      'scripting',
-      'cookies',
-    ],
-    host_permissions: ['<all_urls>', 'https://burner.kiwi/*'],
+    content_security_policy: {
+      extension_pages: "script-src 'self'; object-src 'none'; base-uri 'self';",
+    },
+    permissions: ['storage', 'alarms', 'notifications', 'clipboardWrite', 'scripting', 'cookies'],
+    host_permissions: ['<all_urls>'],
     commands: {
       'autofill-form': {
         suggested_key: {
