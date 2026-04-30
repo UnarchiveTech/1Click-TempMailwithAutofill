@@ -27,17 +27,17 @@ const navItems: { view: View; label: string; icon: Component }[] = [
   { view: 'main', label: 'Inbox', icon: IconMail },
   { view: 'mailSettings', label: 'Manage', icon: IconArchive },
   { view: 'loginInfo', label: 'Saved', icon: IconUser },
-  { view: 'analytics', label: 'Stats', icon: IconBarChart },
+  { view: 'analytics', label: 'Activity', icon: IconBarChart },
   { view: 'settings', label: 'Settings', icon: IconSettings },
   { view: 'about', label: 'About', icon: IconInfo },
 ];
 </script>
 
 <!-- Floating Island Nav -->
-<div class="flex justify-center w-full py-2">
+<div class="flex justify-center w-full py-2 px-0">
   <nav
-    class="flex items-center justify-around gap-0 px-1.5 py-1.5 rounded-full backdrop-blur-2xl bg-base-100/80 border border-base-200/60"
-    style="width: 96%; box-shadow: 0 12px 40px rgba(48,41,80,0.13);"
+    class="flex items-center justify-around gap-0 px-0 py-1.5 rounded-full backdrop-blur-3xl bg-base-100/50 border border-white/10 shadow-xl"
+    style="width: 96%; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.15) inset, 0 0 0 1px rgba(0, 0, 0, 0.05);"
     aria-label="Main navigation"
   >
     {#each navItems as item}

@@ -134,7 +134,7 @@ let {
 </div>
 
 <!-- Account cards list -->
-<div class="flex-1 overflow-y-auto divide-y divide-base-200">
+<div class="flex-1 overflow-y-auto divide-y divide-base-200" style="scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent;">
   {#if loadingInboxes}
     <!-- Skeleton loader -->
     {#each Array(3) as _}
@@ -174,7 +174,7 @@ let {
         </button>
         <!-- Row actions -->
         <div class="flex items-center gap-1 shrink-0 mt-1">
-          {#if account.provider === 'guerrilla'}
+          {#if account.providerConfig?.expiry?.renewable}
             <button
               class="btn btn-sm btn-square border-0 bg-info/15 hover:bg-info/30"
               aria-label="Edit email address"

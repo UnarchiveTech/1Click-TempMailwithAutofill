@@ -2,7 +2,7 @@ import type { Browser } from 'wxt/browser';
 import { logError } from '@/utils/logger.js';
 
 export interface AnalyticsData {
-  createdAt: number | undefined;
+  createdAt: string | number | undefined;
   accountsCreated: number;
   emailsReceived: number;
   otpsDetected: number;

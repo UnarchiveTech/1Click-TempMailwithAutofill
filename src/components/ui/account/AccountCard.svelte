@@ -3,9 +3,10 @@ import IconArchive from '@/components/icons/IconArchive.svelte';
 import IconAutoRenew from '@/components/icons/IconAutoRenew.svelte';
 import IconClock from '@/components/icons/IconClock.svelte';
 import IconEditSquare from '@/components/icons/IconEditSquare.svelte';
-import IconRefresh from '@/components/icons/IconRefresh.svelte';
 import IconTrash from '@/components/icons/IconTrash.svelte';
+import ExpiryPill from '@/components/ui/ExpiryPill.svelte';
 import { canUnarchive } from '@/features/inbox/inbox-management.js';
+import { loadProviderConfig } from '@/services/email-service.js';
 import type { Account } from '@/utils/types.js';
 
 let {
@@ -13,7 +14,7 @@ let {
   selectedEmail = '',
   isArchived = false,
   onSelectAccount = () => {},
-  onExtendAccount = () => {},
+  onToggleAutoExtend = () => {},
   onArchiveAccount = () => {},
   onUnarchiveAccount = () => {},
   onEditAccount = () => {},
@@ -24,7 +25,7 @@ let {
   selectedEmail?: string;
   isArchived?: boolean;
   onSelectAccount?: (address: string) => void;
-  onExtendAccount?: (account: Account) => void;
+  onToggleAutoExtend?: (account: Account) => void;
   onArchiveAccount?: (account: Account) => void;
   onUnarchiveAccount?: (account: Account) => void;
   onEditAccount?: (account: Account) => void;
@@ -33,6 +34,29 @@ let {
 }>();
 
 let hoveredAccountId = $state<string | null>(null);
+
+const supportsCustomEmail = $derived(() => {
+  const providerConfig = loadProviderConfig(account.provider);
+  return providerConfig.ui?.supportsCustomEmail || false;
+});
+
+const expiryProgress = $derived(() => {
+  const now = Date.now();
+  const created = account.createdAt || now - 24 * 60 * 60 * 1000;
+  const expires = account.expiresAt || now + 1000;
+  const total = expires - created;
+  const remaining = expires - now;
+  if (total <= 0) return 0;
+  const pct = Math.max(0, Math.min(100, (remaining / total) * 100));
+  return Math.round(pct);
+});
+
+const expiryTimeMinutes = $derived(() => {
+  const now = Date.now();
+  const expires = account.expiresAt || now + 1000;
+  const remainingMs = expires - now;
+  return Math.max(0, Math.ceil(remainingMs / (60 * 1000)));
+});
 </script>
 
 <div class="px-2 py-1.5 bg-base-200 rounded-xl group/item overflow-hidden" role="listitem">
@@ -96,10 +120,12 @@ let hoveredAccountId = $state<string | null>(null);
           onclick={(e) => { e.stopPropagation(); onTagAccount(account); }}
           aria-label="{account.tag ? 'Edit tag' : 'Add a tag'}"
         >{account.tag || 'Add a tag'}</button>
-        <span class="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-base-100 text-base-content/60 w-fit">
-          <IconClock class="w-2.5 h-2.5" />
-          {account.expiry}
-        </span>
+        <!-- Expiry pill with progress border and toggle button -->
+        <ExpiryPill
+          expiryTime={expiryTimeMinutes()}
+          autoRenew={account.autoExtend}
+          onToggleAutoRenew={() => onToggleAutoExtend(account)}
+        />
       </div>
       <!-- 2x2 icon grid wrapper -->
       <div class="grid grid-cols-2 gap-0 shrink-0" role="toolbar" tabindex="0" onmouseenter={() => hoveredAccountId = account.id} onmouseleave={() => hoveredAccountId = null}>
@@ -110,13 +136,7 @@ let hoveredAccountId = $state<string | null>(null);
         >
           <IconTrash class="w-3.5 h-3.5 text-error" />
         </button>
-        <button
-          class="btn btn-ghost btn-xs btn-square rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-          aria-label="Auto-extend inbox {account.address}"
-          onclick={(e) => { e.stopPropagation(); onExtendAccount(account); }}
-        >
-          <IconRefresh class="w-3.5 h-3.5 {account.autoExtend ? 'text-primary' : 'text-base-content/50'}" />
-        </button>
+        <div></div>
         <button
           class="btn btn-ghost btn-xs btn-square rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
           aria-label="Archive inbox {account.address}"
@@ -124,7 +144,7 @@ let hoveredAccountId = $state<string | null>(null);
         >
           <IconArchive class="w-3.5 h-3.5 text-warning" />
         </button>
-        {#if account.provider === 'guerrilla'}
+        {#if supportsCustomEmail()}
           <button
             class="btn btn-ghost btn-xs btn-square rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
             aria-label="Edit inbox {account.address}"
@@ -148,14 +168,7 @@ let hoveredAccountId = $state<string | null>(null);
         <IconTrash class="w-4 h-4 text-base-content/50 group-hover/btn:text-error group-hover/btn:scale-110 transition-all duration-150" />
         <span class="text-[10px] text-base-content/50 group-hover/btn:text-error transition-colors duration-150">Delete</span>
       </button>
-      <button
-        class="flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg hover:bg-primary/10 transition-all duration-150 group/btn focus:outline-none focus:ring-2 focus:ring-primary/20"
-        aria-label="Auto-extend inbox {account.address}"
-        onclick={(e) => { e.stopPropagation(); onExtendAccount(account); }}
-      >
-        <IconRefresh class="w-4 h-4 {account.autoExtend ? 'text-primary' : 'text-base-content/50'} group-hover/btn:scale-110 transition-transform duration-150" />
-        <span class="text-[10px] text-base-content/50 group-hover/btn:text-primary transition-colors duration-150">Extend</span>
-      </button>
+      <div></div>
       <button
         class="flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg hover:bg-warning/10 transition-all duration-150 group/btn focus:outline-none focus:ring-2 focus:ring-primary/20"
         aria-label="Archive inbox {account.address}"
@@ -164,7 +177,7 @@ let hoveredAccountId = $state<string | null>(null);
         <IconArchive class="w-4 h-4 text-base-content/50 group-hover/btn:text-warning group-hover/btn:scale-110 transition-all duration-150" />
         <span class="text-[10px] text-base-content/50 group-hover/btn:text-warning transition-colors duration-150">Archive</span>
       </button>
-      {#if account.provider === 'guerrilla'}
+      {#if supportsCustomEmail()}
         <button
           class="flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg hover:bg-base-300 transition-all duration-150 group/btn focus:outline-none focus:ring-2 focus:ring-primary/20"
           aria-label="Edit inbox {account.address}"

@@ -3,63 +3,11 @@
  * Single source of truth — import from here in all entrypoints.
  */
 
-export type MailProvider = 'guerrilla' | 'burner';
+export type MailProvider = string;
 
 // ---- API Response Types ----
 
-export interface GuerrillaEmailResponse {
-  mail_id: number;
-  mail_from: string;
-  mail_subject: string;
-  mail_excerpt: string;
-  mail_timestamp: number;
-  mail_body?: string;
-  mail_read?: boolean;
-  attachments?: Array<{
-    filename: string;
-    content_type: string;
-    size: number;
-  }>;
-}
-
-export interface GuerrillaCheckEmailsResponse {
-  success: boolean;
-  list: GuerrillaEmailResponse[];
-  errors?: {
-    msg: string;
-  };
-}
-
-export interface GuerrillaEmailAddressResponse {
-  email_addr: string;
-  sid_token: string;
-}
-
-export interface BurnerCreateInboxResponse {
-  address: string;
-  token: string;
-}
-
-export interface BurnerCheckEmailsResponse {
-  messages: Array<{
-    id: string;
-    from: {
-      address: string;
-      name?: string;
-    };
-    subject: string;
-    intro: string;
-    receivedAt: string;
-    body: string;
-  }>;
-}
-
-export interface BurnerInstanceResponse {
-  id: string;
-  name: string;
-  displayName: string;
-  apiUrl: string;
-}
+// Generic API response - provider-specific structures are in JSON configs
 
 // ---- Storage Data Structures ----
 
@@ -98,10 +46,10 @@ export interface StoredSettings {
   passwordSettings?: PasswordSettings;
   nameSettings?: NameSettings;
   autoCopy?: boolean;
-  autoRenewGuerrilla?: boolean;
+  autoRenew?: boolean;
   selectedProvider?: MailProvider;
-  selectedBurnerInstance?: string;
-  customBurnerInstances?: BurnerInstance[];
+  selectedInstance?: string;
+  customInstances?: ProviderInstance[];
   notificationSettings?: NotificationSettings;
   themeMode?: 'light' | 'dark' | 'system';
   developerSettings?: DeveloperSettings;
@@ -114,7 +62,7 @@ export interface ProviderConfig {
   type: MailProvider;
 }
 
-export interface BurnerInstance {
+export interface ProviderInstance {
   id: string;
   name: string;
   displayName: string;
@@ -123,11 +71,33 @@ export interface BurnerInstance {
 }
 
 export interface Analytics {
-  createdAt?: number;
-  accountsCreated?: number;
-  emailsReceived?: number;
-  otpsDetected?: number;
-  notificationsSent?: number;
+  createdAt?: string | number;
+  accountsCreated: number;
+  emailsReceived: number;
+  otpsDetected: number;
+  notificationsSent: number;
+}
+
+export type ActivityEventType =
+  | 'email_received'
+  | 'otp_detected'
+  | 'notification_sent'
+  | 'account_created'
+  | 'account_deleted'
+  | 'auto_fill';
+
+export interface ActivityEvent {
+  id: string;
+  type: ActivityEventType;
+  timestamp: number;
+  data: {
+    inboxAddress?: string;
+    emailId?: string;
+    otp?: string;
+    sender?: string;
+    subject?: string;
+    website?: string;
+  };
 }
 
 // ---- Domain Types ----
@@ -137,15 +107,17 @@ export interface Account {
   /** The full email address, e.g. "foo@bar.com" */
   address: string;
   provider: MailProvider;
-  token?: string; // For burner.kiwi — bearer token
-  sidToken?: string; // For guerrilla — per-inbox session token
-  lastSequence?: number; // For guerrilla — highest mail_id seen
+  token?: string; // Auth token (bearer, session, etc.)
+  sidToken?: string; // Session token
+  lastSequence?: number; // Sequence tracking for incremental fetching
   createdAt: number; // ms timestamp
   expiresAt: number; // ms timestamp
   expiryNotified?: boolean;
   autoExtend?: boolean;
   tag?: string;
+  tagColor?: string;
   archived?: boolean;
+  instanceUrl?: string; // For multi-instance providers
   // UI-specific properties
   expiry?: string; // Formatted expiry string
   received?: number; // Email count
@@ -185,6 +157,7 @@ export interface SavedLogin {
 
 export interface NotificationSettings {
   enabled: boolean;
+  soundEnabled: boolean;
 }
 
 export interface SessionCredentials {
@@ -308,14 +281,14 @@ export interface SettingsProps {
   loading: boolean;
   onSaveSettings: () => void;
   onHardReset: () => void;
-  burnerInstances: BurnerInstance[];
-  selectedBurnerInstance: string | null;
-  onSetBurnerInstance: (instanceId: string) => void;
+  providerInstances: ProviderInstance[];
+  selectedInstance: string | null;
+  onSetInstance: (instanceId: string) => void;
   onExportData: () => void;
   onImportData: () => void;
   onProviderChange: (provider: string) => void;
   onAddCustomInstance: (name: string, url: string) => void;
-  onLoadBurnerInstances: () => void;
+  onLoadInstances: () => void;
 }
 
 export interface AnalyticsProps {
@@ -378,7 +351,7 @@ export interface DataManager {
 // ---- Background message shapes ----
 
 export type BackgroundMessage =
-  | { type: 'createInbox'; provider?: MailProvider; user?: string }
+  | { type: 'createInbox'; provider?: MailProvider; user?: string; instanceId?: string }
   | { type: 'checkEmails'; inboxId: string; filters?: EmailFilters }
   | { type: 'deleteInbox'; inboxId: string }
   | { type: 'getInboxes' }
@@ -387,17 +360,18 @@ export type BackgroundMessage =
   | { type: 'clearSessionCredentials' }
   | { type: 'updateSessionCredentials'; credentials: Partial<SessionCredentials> }
   | { type: 'getAnalytics' }
-  | { type: 'renewGuerrillaInbox'; inboxId: string }
+  | { type: 'renewInbox'; inboxId: string }
   | { action: 'hardReset' }
-  | { action: 'getBurnerInstances' }
-  | { action: 'addCustomBurnerInstance'; instance: Omit<BurnerInstance, 'id' | 'isCustom'> }
-  | { action: 'removeCustomBurnerInstance'; instanceId: string }
-  | { action: 'getSelectedBurnerInstance' }
-  | { action: 'setSelectedBurnerInstance'; instanceId: string }
-  | { action: 'setBurnerInstance'; instanceId: string }
+  | { action: 'getProviderInstances' }
+  | { action: 'addCustomInstance'; instance: Omit<ProviderInstance, 'id' | 'isCustom'> }
+  | { action: 'removeCustomInstance'; instanceId: string }
+  | { action: 'getSelectedInstance' }
+  | { action: 'setSelectedInstance'; instanceId: string }
+  | { action: 'setInstance'; instanceId: string }
   | { action: 'initializeDefaultProvider' }
   | {
-      action: 'guerrillaApiCall';
+      action: 'providerApiCall';
+      provider: string;
       func: string;
       params?: Record<string, unknown>;
       sidToken?: string;

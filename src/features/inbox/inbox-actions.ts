@@ -1,13 +1,17 @@
+import type { browser } from 'wxt/browser';
+import { DEFAULT_PROVIDER } from '@/services/email-service.js';
 import { ApiError } from '@/utils/errors.js';
 import { logError } from '@/utils/logger.js';
 import { formatDate, formatTimeLeft, getEmailStatus, timeAgo } from '@/utils/time.js';
-import type { Account, Email } from '@/utils/types.js';
+import type { Account, Email, NotificationSettings } from '@/utils/types.js';
 
 export interface InboxState {
   accounts: Account[];
   allInboxes: Account[];
   emails: Email[];
   latestOtp: string;
+  latestOtpSender: string;
+  latestOtpSenderName: string;
   otpContext: string;
   selectedEmail: string;
   loading: boolean;
@@ -21,6 +25,8 @@ export interface InboxSetters {
   setAllInboxes: (allInboxes: Account[]) => void;
   setEmails: (emails: Email[]) => void;
   setLatestOtp: (otp: string) => void;
+  setLatestOtpSender: (sender: string) => void;
+  setLatestOtpSenderName: (name: string) => void;
   setOtpContext: (context: string) => void;
   setSelectedEmail: (email: string) => void;
   setLoading: (loading: boolean) => void;
@@ -48,7 +54,7 @@ export async function loadInboxes(
     const allInboxes = inboxes.map((inbox: Account) => ({
       id: inbox.id,
       address: inbox.address,
-      provider: inbox.provider || 'burner',
+      provider: inbox.provider || DEFAULT_PROVIDER, // Default to burner if not set
       status: getEmailStatus(inbox),
       autoExtend: inbox.autoExtend || false,
       expiry: inbox.autoExtend
@@ -101,7 +107,12 @@ export async function checkMessages(
       const msgs = response.messages || [];
       const emails = msgs.map((m: Email) => ({
         id: m.id,
-        from: m.from_name || 'Unknown',
+        from:
+          (m as Email & { from_address?: string }).from_address ||
+          m.from ||
+          m.from_name ||
+          'Unknown',
+        from_name: m.from_name || '',
         subject: m.subject || 'No Subject',
         time: timeAgo(m.received_at),
         isOtp: !!m.otp,
@@ -111,13 +122,23 @@ export async function checkMessages(
         unread: true,
         received_at: m.received_at,
       }));
-      setters.setEmails(emails);
+      // Force a new array reference to trigger Svelte reactivity
+      setters.setEmails([...emails]);
 
       const latestOtpMsg = msgs
         .filter((m: Email) => m.otp)
         .sort((a: Email, b: Email) => b.received_at - a.received_at)[0];
+      console.log('[inbox-actions] latestOtpMsg:', latestOtpMsg);
       if (latestOtpMsg) {
         setters.setLatestOtp(latestOtpMsg.otp);
+        setters.setLatestOtpSender(latestOtpMsg.from || '');
+        setters.setLatestOtpSenderName(latestOtpMsg.from_name || '');
+        console.log(
+          '[inbox-actions] Set OTP - from:',
+          latestOtpMsg.from,
+          'from_name:',
+          latestOtpMsg.from_name
+        );
         setters.setOtpContext(
           [
             latestOtpMsg.from_name ? `From: ${latestOtpMsg.from_name}` : '',
@@ -128,6 +149,8 @@ export async function checkMessages(
         );
       } else {
         setters.setLatestOtp('------');
+        setters.setLatestOtpSender('');
+        setters.setLatestOtpSenderName('');
         setters.setOtpContext('');
       }
     }
@@ -162,7 +185,12 @@ export function copyEmail(selectedEmail: string, showToast: (message: string) =>
   showToast('Email copied to clipboard');
 }
 
-export async function createInbox(ext: typeof browser, setters: InboxSetters, provider?: string, instanceId?: string) {
+export async function createInbox(
+  ext: typeof browser,
+  setters: InboxSetters,
+  provider?: string,
+  instanceId?: string
+) {
   setters.setLoading(true);
   try {
     const response = await ext.runtime.sendMessage({ type: 'createInbox', provider, instanceId });
@@ -219,8 +247,34 @@ export async function toggleNotifications(
 ) {
   const newEnabled = !currentEnabled;
   setters.setNotificationsEnabled(newEnabled);
-  await ext.storage.local.set({ notificationSettings: { enabled: newEnabled } });
+  const currentSettings = (await ext.storage.local.get(['notificationSettings'])) as {
+    notificationSettings?: NotificationSettings;
+  };
+  await ext.storage.local.set({
+    notificationSettings: {
+      enabled: newEnabled,
+      soundEnabled: currentSettings.notificationSettings?.soundEnabled ?? true,
+    },
+  });
   setters.setShowToast(`Notifications ${newEnabled ? 'enabled' : 'disabled'}`, 'success');
+}
+
+export async function toggleSoundNotifications(
+  ext: typeof browser,
+  currentEnabled: boolean,
+  setters: InboxSetters
+) {
+  const newEnabled = !currentEnabled;
+  const currentSettings = (await ext.storage.local.get(['notificationSettings'])) as {
+    notificationSettings?: NotificationSettings;
+  };
+  await ext.storage.local.set({
+    notificationSettings: {
+      enabled: currentSettings.notificationSettings?.enabled ?? true,
+      soundEnabled: newEnabled,
+    },
+  });
+  setters.setShowToast(`Sound notifications ${newEnabled ? 'enabled' : 'disabled'}`, 'success');
 }
 
 export async function autofillForm(
@@ -232,8 +286,10 @@ export async function autofillForm(
     .query({ active: true, currentWindow: true })
     .then(([tab]: Array<{ id?: number }>) => {
       if (tab?.id) {
-        ext.tabs.sendMessage(tab.id, { action: 'startSignup', email: selectedEmail });
-        showToast('Autofill started', 'success');
+        ext.tabs
+          .sendMessage(tab.id, { action: 'startSignup', email: selectedEmail })
+          .then(() => showToast('Autofill started', 'success'))
+          .catch(() => showToast('Failed to start autofill (content script not loaded)', 'error'));
       } else {
         showToast('No active tab found', 'error');
       }

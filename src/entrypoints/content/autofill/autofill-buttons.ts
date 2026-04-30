@@ -16,8 +16,8 @@ import {
 import { generatePhoneNumber, generateUsername, generateWebsiteUrl } from './generators.js';
 
 // Default colors matching the extension's theme
-const DEFAULT_PRIMARY_COLOR = '#3b82f6';
-const DEFAULT_PRIMARY_HOVER = '#2563eb';
+const DEFAULT_PRIMARY_COLOR = 'var(--color-primary, #3b82f6)';
+const DEFAULT_PRIMARY_HOVER = 'var(--color-primary, #2563eb)';
 
 // Cached colors to avoid repeated storage reads
 let cachedPrimaryColor: string | null = null;

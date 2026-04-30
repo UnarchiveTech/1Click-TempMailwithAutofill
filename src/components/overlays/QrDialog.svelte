@@ -1,6 +1,6 @@
 <script lang="ts">
-import { onMount } from 'svelte';
 import QRCode from 'qrcode';
+import { onMount } from 'svelte';
 import { logError } from '@/utils/logger.js';
 
 interface Props {
@@ -27,7 +27,9 @@ let localCanvas: HTMLCanvasElement | null = null;
 async function generateQR() {
   if (!localCanvas || !selectedEmail) return;
   try {
-    const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#000000';
+    const primaryColor =
+      getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() ||
+      '#000000';
     await QRCode.toCanvas(localCanvas, selectedEmail, {
       width: 160,
       margin: 2,

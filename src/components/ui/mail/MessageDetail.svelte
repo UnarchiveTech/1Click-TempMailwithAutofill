@@ -24,7 +24,7 @@ function _forwardMessage() {
 </script>
 
 {#if selectedMessage}
-<div class="flex items-center justify-between px-4 py-2 border-b border-base-200">
+<div class="flex items-center justify-between px-1 py-2 border-b border-base-200">
   <button class="btn btn-ghost btn-sm gap-1 px-2" aria-label="Go back" onclick={onBack}>
     <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
       <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
@@ -40,7 +40,7 @@ function _forwardMessage() {
 </div>
 {/if}
 {#if selectedMessage}
-  <div class="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+  <div class="flex-1 overflow-y-auto px-1 py-3 space-y-3">
     <div class="card bg-base-200">
       <div class="card-body p-3">
         <div class="font-semibold text-sm">{selectedMessage.subject}</div>

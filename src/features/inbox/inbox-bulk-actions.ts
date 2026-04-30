@@ -79,7 +79,7 @@ export async function unarchiveSelected(
     const count = state.selectedAddresses.size;
     const result = (await ext.storage.local.get(['inboxes'])) as { inboxes?: Account[] };
     const inboxes = result.inboxes || [];
-    
+
     // Filter out expired burner emails that cannot be unarchived
     const canUnarchiveIds = new Set<string>();
     for (const id of state.selectedAddresses) {
@@ -88,20 +88,23 @@ export async function unarchiveSelected(
         canUnarchiveIds.add(id);
       }
     }
-    
+
     if (canUnarchiveIds.size === 0) {
-      setters.setShowToast('No emails can be unarchived (expired Burner.kiwi emails cannot be unarchived)', 'error');
+      setters.setShowToast(
+        'No emails can be unarchived (expired emails cannot be unarchived)',
+        'error'
+      );
       return;
     }
-    
+
     if (canUnarchiveIds.size < state.selectedAddresses.size) {
-      setters.setShowToast(`${canUnarchiveIds.size} of ${count} email(s) can be unarchived (expired Burner.kiwi emails cannot be unarchived)`, 'warning');
+      setters.setShowToast(
+        `${canUnarchiveIds.size} of ${count} email(s) can be unarchived (expired emails cannot be unarchived)`,
+        'warning'
+      );
     }
-    
-    const unarchivedInboxes = inboxes.filter((i: Account) => canUnarchiveIds.has(i.id));
-    const updated = inboxes.map((i) =>
-      canUnarchiveIds.has(i.id) ? { ...i, archived: false } : i
-    );
+
+    const updated = inboxes.map((i) => (canUnarchiveIds.has(i.id) ? { ...i, archived: false } : i));
     await ext.storage.local.set({ inboxes: updated });
     await setters.loadInboxes();
     setters.setSelectedAddresses(new Set());

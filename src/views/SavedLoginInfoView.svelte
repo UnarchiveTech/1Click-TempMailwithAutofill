@@ -18,7 +18,7 @@ function copyToClipboard(text: string) {
 }
 </script>
 
-<div class="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+<div class="flex-1 overflow-y-auto px-4 py-3 space-y-3" style="scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent;">
   {#if savedLogins.length === 0}
     <div class="text-center py-8 text-base-content/50">
       <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 mx-auto mb-2 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">

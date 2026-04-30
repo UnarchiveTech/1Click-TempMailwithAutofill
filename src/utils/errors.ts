@@ -182,7 +182,7 @@ export class InboxAlreadyExistsError extends BaseExtensionError {
 export class InboxSessionConflictError extends BaseExtensionError {
   constructor(context?: Record<string, unknown>, originalError?: Error) {
     super(
-      'Guerrilla Mail session conflict - unable to create unique inbox',
+      'Email session conflict - unable to create unique inbox',
       ErrorCode.INBOX_SESSION_CONFLICT,
       ErrorSeverity.HIGH,
       context,
@@ -215,7 +215,7 @@ export class ProviderUnsupportedError extends BaseExtensionError {
 export class ProviderInstanceNotFoundError extends BaseExtensionError {
   constructor(instanceId: string, context?: Record<string, unknown>) {
     super(
-      `Burner instance not found: ${instanceId}`,
+      `Provider instance not found: ${instanceId}`,
       ErrorCode.PROVIDER_INSTANCE_NOT_FOUND,
       ErrorSeverity.MEDIUM,
       { instanceId, ...context }

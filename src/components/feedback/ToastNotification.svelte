@@ -36,7 +36,7 @@ function getIconPath(icon: string) {
   <div class="toast toast-center {formDetected ? 'toast-top mt-20' : 'toast-bottom mb-20'}">
     <div
       class="alert rounded-xl flex items-center gap-3 px-4 py-3 shadow-lg"
-      style="background-color: var(--color-primary, #2563EB); color: white;"
+      style="background-color: var(--color-primary); color: white;"
     >
       <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={getIconPath(toast.icon || toast.type)}/>

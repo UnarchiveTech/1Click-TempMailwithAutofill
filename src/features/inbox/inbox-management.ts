@@ -1,4 +1,4 @@
-import type { Browser } from 'wxt/browser';
+import { EmailService, loadProviderConfig } from '@/services/email-service.js';
 import { logError } from '@/utils/logger.js';
 import type { Account, Email } from '@/utils/types.js';
 
@@ -12,7 +12,16 @@ export interface ManagementSetters {
   setSelectedEmail: (email: string) => void;
   setEmails: (emails: Email[]) => void;
   setLoading: (loading: boolean) => void;
-  setShowToast: (toast: { message: string; type?: 'success' | 'error' | 'warning'; icon?: 'success' | 'error' | 'warning' | 'expired' | 'archived' | 'deleted' | 'info' } | string, type?: 'success' | 'error' | 'warning') => void;
+  setShowToast: (
+    toast:
+      | {
+          message: string;
+          type?: 'success' | 'error' | 'warning';
+          icon?: 'success' | 'error' | 'warning' | 'expired' | 'archived' | 'deleted' | 'info';
+        }
+      | string,
+    type?: 'success' | 'error' | 'warning'
+  ) => void;
   loadInboxes: () => Promise<void>;
   setDropdownOpen: (open: boolean) => void;
   setEditingAccount: (account: Account | null) => void;
@@ -28,7 +37,11 @@ export async function toggleAutoExtend(ext: Browser, account: Account, setters: 
     );
     await ext.storage.local.set({ inboxes: updated });
     await setters.loadInboxes();
-    setters.setShowToast({ message: `Auto-extend ${!account.autoExtend ? 'enabled' : 'disabled'} for ${account.address}`, type: 'success', icon: 'success' });
+    setters.setShowToast({
+      message: `Auto-extend ${!account.autoExtend ? 'enabled' : 'disabled'} for ${account.address}`,
+      type: 'success',
+      icon: 'success',
+    });
   } catch (_e) {
     setters.setShowToast({ message: 'Failed to toggle auto-extend', type: 'error', icon: 'error' });
   }
@@ -51,7 +64,11 @@ export async function removeAccount(
     }
     setters.setDropdownOpen(false);
     await setters.loadInboxes();
-    setters.setShowToast({ message: `Address ${address} deleted`, type: 'success', icon: 'deleted' });
+    setters.setShowToast({
+      message: `Address ${address} deleted`,
+      type: 'success',
+      icon: 'deleted',
+    });
   } catch (_e) {
     setters.setShowToast({ message: 'Failed to delete address', type: 'error', icon: 'error' });
   }
@@ -61,7 +78,11 @@ export async function archiveAccount(ext: Browser, account: Account, setters: Ma
   try {
     await ext.runtime.sendMessage({ type: 'archiveInbox', inboxId: account.id });
     await setters.loadInboxes();
-    setters.setShowToast({ message: `Address ${account.address} archived`, type: 'success', icon: 'archived' });
+    setters.setShowToast({
+      message: `Address ${account.address} archived`,
+      type: 'success',
+      icon: 'archived',
+    });
   } catch (e) {
     logError('archiveAccount error:', e);
     setters.setShowToast({ message: 'Failed to archive', type: 'error', icon: 'error' });
@@ -70,15 +91,13 @@ export async function archiveAccount(ext: Browser, account: Account, setters: Ma
 
 export async function unarchiveAccount(ext: Browser, account: Account, setters: ManagementSetters) {
   try {
-    // Check if burner.kiwi email is expired - cannot unarchive expired burner emails
-    if (account.provider === 'burner' && account.status === 'expired') {
-      setters.setShowToast({ message: 'Cannot unarchive expired Burner.kiwi email', type: 'error', icon: 'error' });
-      return;
-    }
-
     await ext.runtime.sendMessage({ type: 'unarchiveInbox', inboxId: account.id });
     await setters.loadInboxes();
-    setters.setShowToast({ message: `Address ${account.address} unarchived`, type: 'success', icon: 'success' });
+    setters.setShowToast({
+      message: `Address ${account.address} unarchived`,
+      type: 'success',
+      icon: 'success',
+    });
   } catch (e) {
     logError('unarchiveAccount error:', e);
     setters.setShowToast({ message: 'Failed to unarchive', type: 'error', icon: 'error' });
@@ -86,78 +105,44 @@ export async function unarchiveAccount(ext: Browser, account: Account, setters: 
 }
 
 export function canUnarchive(account: Account): boolean {
-  // Guerrilla Mail can always be unarchived (can be renewed)
-  if (account.provider === 'guerrilla') {
+  const config = loadProviderConfig(account.provider);
+  const canUnarchiveRule = config.ui?.canUnarchive;
+
+  if (canUnarchiveRule === true) {
     return true;
-  }
-  // Burner.kiwi can only be unarchived if not expired
-  if (account.provider === 'burner') {
+  } else if (canUnarchiveRule === 'ifNotExpired') {
     return account.status !== 'expired';
   }
   return false;
 }
 
+async function canRenew(providerId: string): Promise<boolean> {
+  const config = loadProviderConfig(providerId);
+  return config.expiry?.renewable || false;
+}
+
 export async function extendAccount(ext: Browser, account: Account, setters: ManagementSetters) {
   try {
-    if (account.provider !== 'guerrilla') {
-      setters.setShowToast(
-        'Extend functionality is only available for Guerrilla Mail addresses',
-        'error'
-      );
+    if (!(await canRenew(account.provider))) {
+      setters.setShowToast('Extend functionality is not available for this provider', 'error');
       return;
     }
-
-    const currentAddress = account.address;
-    const currentUser = currentAddress.split('@')[0];
 
     setters.setShowToast('Extending email expiry...');
 
-    // Step 1: Create a new hidden email address to get fresh sidToken
-    const newEmailResponse = await ext.runtime.sendMessage({
-      action: 'guerrillaApiCall',
-      func: 'get_email_address',
-      params: {},
+    const result = await ext.runtime.sendMessage({
+      type: 'extendInbox',
+      inboxId: account.id,
     });
 
-    if (!newEmailResponse.success || !newEmailResponse.data.sid_token) {
-      setters.setShowToast('Failed to create temporary address for extension', 'error');
-      return;
-    }
-
-    const newSidToken = newEmailResponse.data.sid_token;
-
-    // Step 2: Use the new sidToken to set the old email address
-    const setUserResponse = await ext.runtime.sendMessage({
-      action: 'guerrillaApiCall',
-      func: 'set_email_user',
-      params: { email_user: currentUser },
-      sidToken: newSidToken,
-    });
-
-    if (setUserResponse.success && setUserResponse.data) {
-      // Update inbox with new sidToken and extended expiry
-      const result = (await ext.storage.local.get(['inboxes'])) as { inboxes?: Account[] };
-      const inboxes = result.inboxes || [];
-      const updatedInboxes = inboxes.map((i: Account) => {
-        if (i.id === account.id) {
-          return {
-            ...i,
-            sidToken: newSidToken,
-            expiresAt: Date.now() + 60 * 60 * 1000, // Extend by 1 hour
-          };
-        }
-        return i;
-      });
-
-      await ext.storage.local.set({ inboxes: updatedInboxes });
-
-      setters.setShowToast(`Email expiry extended for ${currentAddress}`);
+    if (result.success) {
       await setters.loadInboxes();
+      setters.setShowToast('Email expiry extended successfully', 'success');
     } else {
       setters.setShowToast('Failed to extend email expiry', 'error');
     }
   } catch (e) {
-    console.error('Error extending email expiry:', e);
+    logError('extendAccount error:', e);
     setters.setShowToast('Failed to extend email expiry', 'error');
   }
 }
@@ -172,12 +157,38 @@ export function closeEditEmailDialog(setters: ManagementSetters) {
   setters.setEditingAccount(null);
 }
 
+export async function editAccount(ext: Browser, account: Account, setters: ManagementSetters) {
+  try {
+    if (!(await canRenew(account.provider))) {
+      setters.setShowToast('Edit functionality is not available for this provider', 'error');
+      return;
+    }
+
+    const currentAddress = account.address;
+    const _currentUser = currentAddress.split('@')[0];
+
+    setters.setShowToast('Editing email address...');
+
+    const result = await ext.runtime.sendMessage({
+      type: 'editInbox',
+      inboxId: account.id,
+    });
+
+    if (result.success) {
+      await setters.loadInboxes();
+      setters.setShowToast('Email address edited successfully', 'success');
+    } else {
+      setters.setShowToast('Failed to edit email address', 'error');
+    }
+  } catch (e) {
+    logError('editAccount error:', e);
+    setters.setShowToast('Failed to edit email address', 'error');
+  }
+}
+
 export async function editEmailAddress(account: Account, setters: ManagementSetters) {
-  if (account.provider !== 'guerrilla') {
-    setters.setShowToast(
-      'Edit functionality is only available for Guerrilla Mail addresses',
-      'error'
-    );
+  if (!(await canRenew(account.provider))) {
+    setters.setShowToast('Edit functionality is not available for this provider', 'error');
     return;
   }
 
@@ -193,19 +204,26 @@ export async function handleSaveEmailUsername(
   if (!editingAccount) return;
 
   try {
+    const config = loadProviderConfig(editingAccount.provider);
+
+    // Check if provider supports setEmailUser operation
+    if (!config.operations?.setEmailUser) {
+      setters.setShowToast('Email username change not supported for this provider', 'error');
+      return;
+    }
+
     const currentAddress = editingAccount.address;
     const domain = currentAddress.split('@')[1];
     const newAddress = `${newUsername}@${domain}`;
 
-    // Call background script to change email address
-    const response = await ext.runtime.sendMessage({
-      action: 'guerrillaApiCall',
-      func: 'set_email_user',
-      params: { email_user: newUsername },
-      sidToken: editingAccount.sidToken,
+    // Use EmailService to change email address
+    const service = new EmailService(config, ext);
+    const response = await service.executeOperation('setEmailUser', {
+      auth: { token: editingAccount.sidToken as string },
+      variables: { emailUser: newUsername },
     });
 
-    if (response.success && response.data) {
+    if (response) {
       // Update inbox with new address
       const { inboxes = [] } = (await ext.storage.local.get(['inboxes'])) as {
         inboxes?: Account[];

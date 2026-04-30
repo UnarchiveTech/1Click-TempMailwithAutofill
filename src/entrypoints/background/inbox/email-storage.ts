@@ -3,7 +3,10 @@
  */
 
 import { browser } from 'wxt/browser';
-import { log } from '@/utils/logger.js';
+import { addActivityEvent } from '@/utils/activity-tracker.js';
+import { DEBUG, MAX_STORED_EMAILS_PER_INBOX } from '@/utils/constants.js';
+// biome-ignore lint/correctness/noUnusedImports: log is used in the file
+import { log, logError } from '@/utils/logger.js';
 import type {
   Account,
   Analytics,
@@ -12,7 +15,33 @@ import type {
   NotificationSettings,
 } from '@/utils/types.js';
 
-const MAX_EMAILS_PER_INBOX = 50;
+/**
+ * Play a notification sound using Web Audio API
+ */
+function playNotificationSound() {
+  try {
+    // Create audio context
+    const audioContext = new (
+      window.AudioContext ||
+      (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    )();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.frequency.value = 800; // Hz
+    oscillator.type = 'sine';
+    gainNode.gain.value = 0.1; // Volume
+
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.2); // 200ms beep
+  } catch (e) {
+    if (DEBUG) log('Failed to play notification sound:', e);
+  }
+}
+
 const ACTIVE_EMAIL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const ARCHIVED_EMAIL_RETENTION_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
@@ -134,15 +163,21 @@ export async function storeNewMessages(inboxAddress: string, newMessages: Email[
     storedEmails[inboxAddress] = [];
   }
 
-  storedEmails[inboxAddress].push(...newMessages);
-  storedEmails[inboxAddress].sort((a: Email, b: Email) => b.received_at - a.received_at);
+  // Deduplicate messages by ID to avoid duplicates
+  const existingIds = new Set(storedEmails[inboxAddress].map((e: Email) => e.id));
+  const uniqueNewMessages = newMessages.filter((msg: Email) => !existingIds.has(msg.id));
 
-  if (storedEmails[inboxAddress].length > MAX_EMAILS_PER_INBOX) {
-    storedEmails[inboxAddress] = storedEmails[inboxAddress].slice(0, MAX_EMAILS_PER_INBOX);
+  if (uniqueNewMessages.length > 0) {
+    storedEmails[inboxAddress].push(...uniqueNewMessages);
+    storedEmails[inboxAddress].sort((a: Email, b: Email) => b.received_at - a.received_at);
+
+    if (storedEmails[inboxAddress].length > MAX_STORED_EMAILS_PER_INBOX) {
+      storedEmails[inboxAddress] = storedEmails[inboxAddress].slice(0, MAX_STORED_EMAILS_PER_INBOX);
+    }
+
+    await browser.storage.local.set({ storedEmails });
+    if (DEBUG) log(`Stored ${uniqueNewMessages.length} new emails for ${inboxAddress}`);
   }
-
-  await browser.storage.local.set({ storedEmails });
-  log(`Stored ${newMessages.length} new emails for ${inboxAddress}`);
 }
 
 export async function applyFiltersAndProcessMessages(
@@ -155,6 +190,7 @@ export async function applyFiltersAndProcessMessages(
   };
   const notificationSettings: NotificationSettings = result.notificationSettings ?? {
     enabled: true,
+    soundEnabled: true,
   };
 
   const tsResult = (await browser.storage.local.get(['lastMessageTimestamps'])) as {
@@ -171,15 +207,23 @@ export async function applyFiltersAndProcessMessages(
       .sort((a: Email, b: Email) => b.received_at - a.received_at)[0];
 
     if (latestNewMessageWithOtp) {
-      // biome-ignore lint/suspicious/noExplicitAny: Chrome tabs API type
-      browser.tabs.query({ active: true, currentWindow: true }, (tabs: any[]) => {
-        if (tabs.length > 0 && tabs[0].id) {
-          browser.tabs.sendMessage(tabs[0].id, {
-            type: 'fillOTP',
-            otp: latestNewMessageWithOtp.otp,
-          });
-        }
-      });
+      try {
+        // biome-ignore lint/suspicious/noExplicitAny: Chrome tabs API type
+        browser.tabs.query({ active: true, currentWindow: true }, (tabs: any[]) => {
+          if (tabs.length > 0 && tabs[0].id) {
+            browser.tabs
+              .sendMessage(tabs[0].id, {
+                type: 'fillOTP',
+                otp: latestNewMessageWithOtp.otp,
+              })
+              .catch(() => {
+                // Ignore if content script not loaded in the tab
+              });
+          }
+        });
+      } catch {
+        // Ignore if no active tab or tab query fails
+      }
     }
   }
 
@@ -191,33 +235,82 @@ export async function applyFiltersAndProcessMessages(
     await browser.storage.local.set({ lastMessageTimestamps });
   }
 
+  // Track activity events for new emails
+  for (const msg of newMessages) {
+    await addActivityEvent('email_received', {
+      inboxAddress: inbox.address,
+      emailId: msg.id,
+      sender: msg.from_name || msg.from,
+      subject: msg.subject,
+    });
+
+    if (msg.otp) {
+      await addActivityEvent('otp_detected', {
+        inboxAddress: inbox.address,
+        emailId: msg.id,
+        otp: msg.otp,
+        sender: msg.from_name || msg.from,
+        subject: msg.subject,
+      });
+    }
+  }
+
+  // Update email received analytics
+  const {
+    analytics = { accountsCreated: 0, emailsReceived: 0, otpsDetected: 0, notificationsSent: 0 },
+  } = (await browser.storage.local.get(['analytics'])) as {
+    analytics?: Analytics;
+  };
+  (analytics as Analytics).emailsReceived =
+    ((analytics as Analytics).emailsReceived || 0) + newMessages.length;
+  await browser.storage.local.set({ analytics });
+
   // Send notifications for new messages
   if (notificationSettings.enabled && newMessages.length > 0) {
+    // Play sound if enabled
+    if (notificationSettings.soundEnabled) {
+      playNotificationSound();
+    }
+
     newMessages.forEach((msg: Email) => {
-      browser.notifications.create({
+      const notificationId = `email_${msg.id}_${inbox.id}`;
+      browser.notifications.create(notificationId, {
         type: 'basic',
         iconUrl: 'icons/icon48.png',
         title: `New Email in ${inbox.address}`,
         message: `${msg.from_name || 'Unknown Sender'}: ${msg.subject || 'No Subject'}`,
         priority: 0,
+        contextMessage: 'Click to view email',
       });
     });
 
-    const { analytics = {} } = (await browser.storage.local.get(['analytics'])) as {
-      analytics?: Analytics;
-    };
+    // Update notifications sent analytics
     (analytics as Analytics).notificationsSent =
       ((analytics as Analytics).notificationsSent || 0) + newMessages.length;
     await browser.storage.local.set({ analytics });
+
+    // Track notification events
+    for (const msg of newMessages) {
+      await addActivityEvent('notification_sent', {
+        inboxAddress: inbox.address,
+        emailId: msg.id,
+        sender: msg.from_name || msg.from,
+        subject: msg.subject,
+      });
+    }
   }
 
   // Update OTP analytics
-  const { analytics = {} }: { analytics: Analytics } = (await browser.storage.local.get([
-    'analytics',
-  ])) as { analytics: Analytics };
   const otpCount = messages.filter((msg: Email) => msg.otp).length;
-  analytics.otpsDetected = (analytics.otpsDetected || 0) + otpCount;
-  await browser.storage.local.set({ analytics });
+  if (otpCount > 0) {
+    const {
+      analytics = { accountsCreated: 0, emailsReceived: 0, otpsDetected: 0, notificationsSent: 0 },
+    }: { analytics: Analytics } = (await browser.storage.local.get(['analytics'])) as {
+      analytics: Analytics;
+    };
+    analytics.otpsDetected = (analytics.otpsDetected || 0) + otpCount;
+    await browser.storage.local.set({ analytics });
+  }
 
   // Apply filters
   let filteredMessages: Email[] = messages;

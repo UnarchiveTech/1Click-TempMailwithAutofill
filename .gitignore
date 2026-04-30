@@ -11,6 +11,7 @@ bun.lock
 bun.lockb
 package-lock.json
 
-reference/
+
 .DS_Store
 *.log
+reference/

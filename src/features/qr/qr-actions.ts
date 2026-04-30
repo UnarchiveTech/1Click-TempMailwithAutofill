@@ -18,7 +18,7 @@ export interface QRSetters {
 }
 
 export async function openQrDialog(
-  selectedEmail: string,
+  _selectedEmail: string,
   state: QRState,
   setters: QRSetters,
   setupFocusTrap: (element: HTMLElement) => void
@@ -53,13 +53,15 @@ export async function generateQRCode(canvas: HTMLCanvasElement, text: string, cu
     const primaryColor =
       customColor ||
       getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() ||
-      '#000000';
+      'var(--color-primary)';
     await QRCode.toCanvas(canvas, text, {
       width: 160,
       margin: 2,
       color: {
         dark: primaryColor,
-        light: '#ffffff',
+        light:
+          getComputedStyle(document.documentElement).getPropertyValue('--color-base-100').trim() ||
+          'var(--color-base-100)',
       },
     });
   } catch (e) {

@@ -2,11 +2,29 @@
 import { browser } from 'wxt/browser';
 import AppLogo from '@/components/icons/AppLogo.svelte';
 import { handleCreateInbox } from '@/features/onboarding/onboarding-actions.js';
+import { loadAllProviderConfigs } from '@/services/email-service.js';
 
 let { onCreateInbox }: { onCreateInbox: (provider: string) => void } = $props();
 
-let selectedProvider = $state<'guerrilla' | 'burner'>('guerrilla');
+let selectedProvider = $state<string>('');
 let step = $state<1 | 2>(1);
+
+// Load providers dynamically
+let providers = $derived.by(() => {
+  try {
+    const allProviderConfigs = loadAllProviderConfigs();
+    return Object.values(allProviderConfigs);
+  } catch {
+    return [];
+  }
+});
+
+// Select first provider by default
+$effect(() => {
+  if (providers.length > 0 && !selectedProvider) {
+    selectedProvider = providers[0].id;
+  }
+});
 
 async function createFirstInbox(provider: string) {
   await handleCreateInbox(provider, browser, { onCreateInbox });
@@ -90,46 +108,38 @@ async function createFirstInbox(provider: string) {
 
     <!-- Provider selection -->
     <div class="w-full flex flex-col gap-3">
-      <button
-        class="flex items-center gap-4 w-full rounded-xl px-4 py-3 border-2 transition-all {selectedProvider === 'guerrilla' ? 'border-primary bg-primary/5' : 'border-base-300 bg-base-200 hover:border-base-content/20'}"
-        onclick={() => selectedProvider = 'guerrilla'}
-      >
-        <div class="w-9 h-9 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/>
-          </svg>
-        </div>
-        <div class="text-left flex-1">
-          <p class="text-sm font-semibold text-base-content">Guerrilla Mail</p>
-          <p class="text-xs text-base-content/50">Auto-renewing · Editable address</p>
-        </div>
-        {#if selectedProvider === 'guerrilla'}
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>
-        {/if}
-      </button>
-
-      <button
-        class="flex items-center gap-4 w-full rounded-xl px-4 py-3 border-2 transition-all {selectedProvider === 'burner' ? 'border-primary bg-primary/5' : 'border-base-300 bg-base-200 hover:border-base-content/20'}"
-        onclick={() => selectedProvider = 'burner'}
-      >
-        <div class="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1A3.75 3.75 0 0012 18z"/>
-          </svg>
-        </div>
-        <div class="text-left flex-1">
-          <p class="text-sm font-semibold text-base-content">Burner.kiwi</p>
-          <p class="text-xs text-base-content/50">24-hour expiry · Multiple instances</p>
-        </div>
-        {#if selectedProvider === 'burner'}
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>
-        {/if}
-      </button>
+      {#each providers as provider}
+        <button
+          class="flex items-center gap-4 w-full rounded-xl px-4 py-3 border-2 transition-all {selectedProvider === provider.id ? 'border-primary bg-primary/5' : 'border-base-300 bg-base-200 hover:border-base-content/20'}"
+          onclick={() => selectedProvider = provider.id}
+        >
+          <div class="w-9 h-9 rounded-lg {(provider as any).ui?.color?.replace('text-', 'bg-') || 'bg-primary/10'} flex items-center justify-center shrink-0">
+            {#if (provider as any).ui?.icon === 'envelope'}
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 {(provider as any).ui?.color || 'text-primary'}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/>
+              </svg>
+            {:else if (provider as any).ui?.icon === 'flame'}
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 {(provider as any).ui?.color || 'text-primary'}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1A3.75 3.75 0 0012 18z"/>
+              </svg>
+            {:else}
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/>
+              </svg>
+            {/if}
+          </div>
+          <div class="text-left flex-1">
+            <p class="text-sm font-semibold text-base-content">{provider.displayName}</p>
+            <p class="text-xs text-base-content/50">{(provider as any).ui?.description || 'Temporary email provider'}</p>
+          </div>
+          {#if selectedProvider === provider.id}
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          {/if}
+        </button>
+      {/each}
     </div>
 
     <div class="w-full flex flex-col gap-2">

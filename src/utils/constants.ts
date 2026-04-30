@@ -3,14 +3,16 @@
  * Centralizes configuration to improve maintainability
  */
 
+// Debug mode - set to false for production
+export const DEBUG = true;
+
 // Email check intervals (in milliseconds)
-export const EMAIL_CHECK_INTERVAL_MS = 30 * 1000; // 30 seconds
+export const EMAIL_CHECK_INTERVAL_MS = 10 * 1000; // 10 seconds
 export const EMAIL_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const INBOX_EXPIRY_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
 
 // Inbox expiration times (in milliseconds)
-export const GUERRILLA_MAIL_EXPIRY_MS = 60 * 60 * 1000; // 60 minutes
-export const BURNER_MAIL_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+// Provider-specific constants moved to JSON configs
 export const EXPIRY_WARNING_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour before expiry
 
 // Password generation

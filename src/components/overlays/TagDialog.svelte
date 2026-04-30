@@ -2,20 +2,27 @@
 interface Props {
   open: boolean;
   currentTag: string | null;
+  currentTagColor: string | null;
   existingTags: string[];
+  tagColors: Record<string, string>;
   onClose: () => void;
-  onSave: (tag: string) => void;
+  onSave: (tag: string, color: string) => void;
 }
-let { open, currentTag, existingTags, onClose, onSave }: Props = $props();
+let { open, currentTag, currentTagColor, existingTags, tagColors, onClose, onSave }: Props =
+  $props();
 
 let tagInput = $state('');
 let selectedExistingTag = $state<string | null>(null);
+let selectedColor = $state('#6366F1');
 
 // Initialize with current tag when dialog opens
 $effect(() => {
   if (open && currentTag) {
     tagInput = currentTag;
     selectedExistingTag = currentTag;
+    if (currentTagColor) {
+      selectedColor = currentTagColor;
+    }
   } else if (open) {
     tagInput = '';
     selectedExistingTag = null;
@@ -24,14 +31,19 @@ $effect(() => {
 
 function handleSave() {
   const tagToSave = selectedExistingTag || tagInput.trim();
-  if (tagToSave) {
-    onSave(tagToSave);
-  }
+  const colorToSave =
+    selectedExistingTag && tagColors[selectedExistingTag]
+      ? tagColors[selectedExistingTag]
+      : selectedColor;
+  onSave(tagToSave, colorToSave);
 }
 
 function selectExistingTag(tag: string) {
   selectedExistingTag = tag;
   tagInput = tag;
+  if (tagColors[tag]) {
+    selectedColor = tagColors[tag];
+  }
 }
 
 function clearSelection() {
@@ -77,8 +89,8 @@ function clearSelection() {
           placeholder="Enter tag name..."
           bind:value={tagInput}
           oninput={() => {
-            // Clear selected existing tag when user types in input
-            if (selectedExistingTag && tagInput !== selectedExistingTag) {
+            // Clear selected existing tag when user types in input or clears it
+            if (selectedExistingTag && (tagInput !== selectedExistingTag || tagInput === '')) {
               selectedExistingTag = null;
             }
           }}
@@ -100,6 +112,21 @@ function clearSelection() {
         {/if}
       </div>
 
+      <!-- Color picker -->
+      <div>
+        <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-2">Tag Color</p>
+        <div class="flex items-center gap-2 flex-wrap">
+          {#each ['#6366F1', '#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#64748B'] as color}
+            <button
+              class="w-6 h-6 rounded-full border-2 {selectedColor === color ? 'border-base-content scale-110' : 'border-transparent'} transition-all"
+              style="background-color: {color};"
+              onclick={() => selectedColor = color}
+              aria-label={`Select color ${color}`}
+            ></button>
+          {/each}
+        </div>
+      </div>
+
       <!-- Existing tags -->
       {#if existingTags.length > 0}
         <div>
@@ -107,9 +134,12 @@ function clearSelection() {
           <div class="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
             {#each existingTags as tag}
               <button
-                class="btn btn-xs {selectedExistingTag === tag ? 'btn-primary' : 'btn-ghost'} rounded-full"
+                class="btn btn-xs {selectedExistingTag === tag ? 'btn-primary' : 'btn-ghost'} rounded-full flex items-center gap-1"
                 onclick={() => selectExistingTag(tag)}
               >
+                {#if tagColors[tag]}
+                  <span class="w-3 h-3 rounded-full" style="background-color: {tagColors[tag]};"></span>
+                {/if}
                 {tag}
               </button>
             {/each}
@@ -130,7 +160,6 @@ function clearSelection() {
           class="btn btn-sm btn-primary flex-1 rounded-xl"
           aria-label="Save tag"
           onclick={handleSave}
-          disabled={!tagInput.trim()}
         >
           Save
         </button>

@@ -1,6 +1,8 @@
+import { DEFAULT_PROVIDER, loadProviderConfig } from '@/services/email-service.js';
 import { ApiError, ValidationError } from '@/utils/errors.js';
+import { setProviderInstance as setProviderInstanceStorage } from '@/utils/instance-manager.js';
 import { logError } from '@/utils/logger.js';
-import type { Account, BurnerInstance } from '@/utils/types.js';
+import type { Account, ProviderInstance } from '@/utils/types.js';
 import { validateCustomInstanceName, validateCustomInstanceUrl } from '@/utils/validation.js';
 
 export interface SettingsState {
@@ -12,8 +14,8 @@ export interface SettingsState {
   autoCopy: boolean;
   autoRenew: boolean;
   selectedProvider: string;
-  burnerInstances: BurnerInstance[];
-  selectedBurnerInstance: string | null;
+  providerInstances: ProviderInstance[];
+  selectedProviderInstance: string | null;
   customColor: string;
   showDeveloperSettings: boolean;
   enableLogging: boolean;
@@ -30,8 +32,8 @@ export interface SettingsSetters {
   setAutoCopy: (value: boolean) => void;
   setAutoRenew: (value: boolean) => void;
   setSelectedProvider: (value: string) => void;
-  setBurnerInstances: (instances: BurnerInstance[]) => void;
-  setSelectedBurnerInstance: (instanceId: string | null) => void;
+  setProviderInstances: (instances: ProviderInstance[]) => void;
+  setSelectedProviderInstance: (instanceId: string | null) => void;
   setCustomColor: (value: string) => void;
   setShowDeveloperSettings: (value: boolean) => void;
   setEnableLogging: (value: boolean) => void;
@@ -52,7 +54,7 @@ export async function loadSettings(
       'passwordSettings',
       'nameSettings',
       'autoCopy',
-      'autoRenewGuerrilla',
+      'autoRenew',
       'selectedProvider',
       'customColor',
       'developerSettings',
@@ -60,7 +62,7 @@ export async function loadSettings(
       passwordSettings?: { useCustom: boolean; customPassword: string };
       nameSettings?: { useCustom: boolean; firstName: string; lastName: string };
       autoCopy?: boolean;
-      autoRenewGuerrilla?: boolean;
+      autoRenew?: boolean;
       selectedProvider?: string;
       customColor?: string;
       developerSettings?: { showDeveloperSettings: boolean; enableLogging: boolean };
@@ -75,7 +77,7 @@ export async function loadSettings(
       setters.setCustomLastName(result.nameSettings.lastName || '');
     }
     if (result.autoCopy !== undefined) setters.setAutoCopy(result.autoCopy);
-    if (result.autoRenewGuerrilla !== undefined) setters.setAutoRenew(result.autoRenewGuerrilla);
+    if (result.autoRenew !== undefined) setters.setAutoRenew(result.autoRenew);
     if (result.selectedProvider) setters.setSelectedProvider(result.selectedProvider);
     if (result.customColor) setters.setCustomColor(result.customColor);
     if (result.developerSettings) {
@@ -107,7 +109,7 @@ export async function saveSettings(
         lastName: state.customLastName,
       },
       autoCopy: state.autoCopy,
-      autoRenewGuerrilla: state.autoRenew,
+      autoRenew: state.autoRenew,
       selectedProvider: state.selectedProvider,
       customColor: state.customColor,
       developerSettings: {
@@ -182,72 +184,70 @@ export async function saveAutoCopy(ext: typeof browser, value: boolean) {
 }
 
 export async function saveAutoRenew(ext: typeof browser, value: boolean) {
-  await ext.storage.local.set({ autoRenewGuerrilla: value });
+  await ext.storage.local.set({ autoRenew: value });
 }
 
 export async function handleColorChange(ext: typeof browser, color: string) {
   await ext.storage.local.set({ customColor: color });
 }
 
-export async function changeProvider(
+export async function switchProvider(
   ext: typeof browser,
   provider: string,
   setters: SettingsSetters
 ) {
   setters.setSelectedProvider(provider);
   await ext.storage.local.set({ selectedProvider: provider });
-  if (provider === 'burner') {
-    await loadBurnerInstances(ext, setters);
+  const config = loadProviderConfig(provider);
+  if (config.ui?.multiInstance) {
+    await loadProviderInstances(ext, setters);
   }
   await setters.loadInboxes();
-  setters.setShowToast(
-    `Switched to ${provider === 'guerrilla' ? 'Guerrilla Mail' : 'Burner.kiwi'}`,
-    'success'
-  );
+  setters.setShowToast(`Switched to ${config.displayName}`, 'success');
 }
 
-export async function loadBurnerInstances(ext: typeof browser, setters: SettingsSetters) {
+export const changeProvider = switchProvider;
+
+export async function loadProviderInstances(ext: typeof browser, setters: SettingsSetters) {
   try {
-    const response = await ext.runtime.sendMessage({ action: 'getBurnerInstances' });
-    if (response?.success) setters.setBurnerInstances(response.instances || []);
-    
-    // Check the storage directly to see if it's set to 'random'
-    const storageResult = await ext.storage.local.get(['selectedBurnerInstance']) as { selectedBurnerInstance?: string };
-    
-    if (storageResult.selectedBurnerInstance === 'random') {
-      // If storage is 'random', keep it as 'random' in the UI
-      setters.setSelectedBurnerInstance('random');
-    } else if (storageResult.selectedBurnerInstance) {
-      // If a specific instance is set in storage, use it in the UI
-      setters.setSelectedBurnerInstance(storageResult.selectedBurnerInstance);
-    } else if (response?.success && response.instances && response.instances.length > 0) {
-      // Set to 'random' by default instead of a specific instance
-      setters.setSelectedBurnerInstance('random');
-      await ext.runtime.sendMessage({ action: 'setSelectedBurnerInstance', instanceId: 'random' });
+    const { selectedProvider } = await ext.storage.local.get(['selectedProvider']);
+    const provider = selectedProvider || DEFAULT_PROVIDER;
+    const response = await ext.runtime.sendMessage({ action: 'getProviderInstances', provider });
+    if (response?.success) setters.setProviderInstances(response.instances || []);
+    const storageKey = `selectedInstance_${provider}`;
+    const storageResult = (await ext.storage.local.get([storageKey])) as {
+      [key: string]: string | undefined;
+    };
+    const selectedInstance = storageResult[storageKey];
+    if (selectedInstance === 'random') {
+      setters.setSelectedProviderInstance('random');
+    } else if (selectedInstance) {
+      setters.setSelectedProviderInstance(selectedInstance);
+    } else {
+      setters.setSelectedProviderInstance('random');
+      await ext.storage.local.set({ [storageKey]: 'random' });
     }
-  } catch (e: unknown) {
+  } catch (error: unknown) {
     logError(
-      'loadBurnerInstances error:',
+      'loadProviderInstances error:',
       undefined,
-      e instanceof Error ? e : new Error(String(e))
+      error instanceof Error ? error : new Error(String(error))
     );
   }
 }
 
-export async function setBurnerInstance(
-  ext: typeof browser,
+export async function setProviderInstance(
   instanceId: string,
+  ext: typeof browser,
   setters: SettingsSetters
 ) {
+  const { selectedProvider } = await ext.storage.local.get(['selectedProvider']);
+  const provider = selectedProvider || DEFAULT_PROVIDER;
+  await setProviderInstanceStorage(provider, instanceId);
   if (instanceId === 'random') {
-    // Random instance - clear stored selection so it picks randomly each time
-    setters.setSelectedBurnerInstance('random');
-    await ext.runtime.sendMessage({ action: 'setSelectedBurnerInstance', instanceId: 'random' });
     setters.setShowToast('Random instance mode enabled', 'success');
   } else {
-    setters.setSelectedBurnerInstance(instanceId);
-    await ext.runtime.sendMessage({ action: 'setSelectedBurnerInstance', instanceId });
-    setters.setShowToast('Burner instance updated', 'success');
+    setters.setShowToast('Instance updated', 'success');
   }
   await setters.loadInboxes();
 }
@@ -289,16 +289,7 @@ export async function addCustomInstance(
   ];
   const isBlacklisted = blacklistedPatterns.some((pattern) => domain.includes(pattern));
 
-  const whitelistedDomains = [
-    'burner.kiwi',
-    'guerrillamail.com',
-    'guerrillamail.de',
-    'guerrillamail.net',
-    'guerrillamail.org',
-    'sharklasers.com',
-    'airmail.cc',
-    'temp-mail.org',
-  ];
+  const whitelistedDomains = ['temp-mail.org', 'sharklasers.com', 'airmail.cc'];
   const isWhitelisted = whitelistedDomains.some(
     (allowed) => domain === allowed || domain.endsWith(`.${allowed}`)
   );
@@ -314,12 +305,12 @@ export async function addCustomInstance(
   }
 
   const response = await ext.runtime.sendMessage({
-    action: 'addCustomBurnerInstance',
+    action: 'addCustomProviderInstance',
     instance: { name: name.toLowerCase().replace(/\s+/g, '-'), displayName: name, apiUrl: url },
   });
   if (response?.success) {
     setters.setShowToast('Custom instance added', 'success');
-    await loadBurnerInstances(ext, setters);
+    await loadProviderInstances(ext, setters);
   } else setters.setShowToast('Failed to add instance', 'error');
 }
 

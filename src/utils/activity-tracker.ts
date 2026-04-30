@@ -1,0 +1,42 @@
+/**
+ * Activity event tracking for timeline
+ */
+
+import { browser } from 'wxt/browser';
+import type { ActivityEvent, ActivityEventType } from '@/utils/types.js';
+
+const MAX_ACTIVITY_EVENTS = 100;
+
+export async function getActivityEvents(): Promise<ActivityEvent[]> {
+  const result = (await browser.storage.local.get(['activityEvents'])) as {
+    activityEvents?: ActivityEvent[];
+  };
+  return result.activityEvents || [];
+}
+
+export async function addActivityEvent(
+  type: ActivityEventType,
+  data: ActivityEvent['data']
+): Promise<void> {
+  const events = await getActivityEvents();
+  const newEvent: ActivityEvent = {
+    id: `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    type,
+    timestamp: Date.now(),
+    data,
+  };
+
+  // Add new event at the beginning
+  events.unshift(newEvent);
+
+  // Keep only the most recent events
+  if (events.length > MAX_ACTIVITY_EVENTS) {
+    events.splice(MAX_ACTIVITY_EVENTS);
+  }
+
+  await browser.storage.local.set({ activityEvents: events });
+}
+
+export async function clearActivityEvents(): Promise<void> {
+  await browser.storage.local.remove(['activityEvents']);
+}

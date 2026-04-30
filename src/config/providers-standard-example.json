@@ -1,0 +1,36 @@
+{
+  "operations": {
+    "createInbox": {
+      "method": "GET",
+      "endpoint": "get_email_address",
+      "response": {
+        "address": "email_addr",
+        "id": "sid_token",
+        "token": "sid_token",
+        "createdAt": "email_timestamp"
+      }
+    },
+    "fetchEmails": {
+      "method": "GET",
+      "endpoint": "check_email",
+      "response": {}
+    },
+    "getEmailDetail": {
+      "method": "GET",
+      "endpoint": "fetch_email",
+      "response": {}
+    },
+    "deleteInbox": {
+      "method": "GET",
+      "endpoint": "forget_me",
+      "response": {}
+    },
+    "setEmailUser": {
+      "method": "POST",
+      "endpoint": "set_email_user",
+      "response": {
+        "address": "email_addr"
+      }
+    }
+  }
+}

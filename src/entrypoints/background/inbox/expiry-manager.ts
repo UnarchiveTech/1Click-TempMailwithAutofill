@@ -4,10 +4,10 @@
  */
 
 import { browser } from 'wxt/browser';
+import { EmailService, loadProviderConfig } from '@/services/email-service.js';
 import { EXPIRY_WARNING_THRESHOLD_MS } from '@/utils/constants.js';
 import { logError } from '@/utils/logger.js';
 import type { Account, NotificationSettings } from '@/utils/types.js';
-import { autoRenewGuerrillaInbox } from '../providers/guerrilla-api.js';
 import { archiveInboxEmails } from './email-storage.js';
 
 export async function checkInboxExpiry(): Promise<void> {
@@ -27,10 +27,73 @@ export async function checkInboxExpiry(): Promise<void> {
       const inbox = updatedInboxes[i];
 
       if (inbox.expiresAt && inbox.expiresAt <= now) {
-        if (inbox.autoExtend && inbox.provider === 'guerrilla') {
+        if (inbox.autoExtend) {
+          const providerConfig = loadProviderConfig(inbox.provider);
+          if (!providerConfig.expiry?.renewable) {
+            // Provider doesn't support renewal, skip to expiry handling
+            await archiveInboxEmails(inbox.address);
+            updatedInboxes[i] = { ...inbox, archived: true };
+
+            if (notificationSettings?.enabled) {
+              browser.notifications.create({
+                type: 'basic',
+                iconUrl: 'icons/icon48.png',
+                title: 'Inbox Expired',
+                message: `The inbox ${inbox.address} has expired. Emails have been archived for future access.`,
+                priority: 1,
+              });
+            }
+            continue;
+          }
           try {
-            const renewedInbox = await autoRenewGuerrillaInbox(inbox);
-            updatedInboxes[i] = renewedInbox;
+            // Auto-renew inbox using EmailService
+            const config = loadProviderConfig(inbox.provider);
+            const service = new EmailService(config, browser);
+
+            if (!inbox.token && !inbox.sidToken) {
+              throw new Error('No token available for renewal');
+            }
+
+            const currentUser = inbox.address.split('@')[0];
+            const newEmailResponse = await service.executeOperation('createInbox', {
+              forceNewSession: true,
+            });
+
+            if (!newEmailResponse.token) {
+              throw new Error('Failed to get fresh token for renewal');
+            }
+
+            const newSidToken = newEmailResponse.token as string;
+
+            // Call renewal operation from config
+            const renewalConfig = loadProviderConfig(inbox.provider);
+            if (renewalConfig.expiry?.renewalMethod) {
+              await service.executeOperation(renewalConfig.expiry.renewalMethod, {
+                auth: { token: newSidToken },
+                variables: { emailUser: currentUser },
+              });
+            }
+
+            const { inboxes: allInboxes = [] } = (await browser.storage.local.get(['inboxes'])) as {
+              inboxes?: Account[];
+            };
+            const inboxIndex = allInboxes.findIndex((i: Account) => i.id === inbox.id);
+
+            if (inboxIndex !== -1) {
+              const timestamp = newEmailResponse.timestamp as number;
+              const renewedInbox = {
+                ...allInboxes[inboxIndex],
+                token: newSidToken,
+                sidToken: newSidToken,
+                expiresAt:
+                  ((timestamp || 0) + (providerConfig.expiry?.duration || 3600000) / 1000) * 1000,
+                expiryNotified: false,
+              };
+
+              allInboxes[inboxIndex] = renewedInbox;
+              await browser.storage.local.set({ inboxes: allInboxes });
+              updatedInboxes[i] = renewedInbox;
+            }
 
             if (notificationSettings?.enabled) {
               browser.notifications.create({

@@ -14,6 +14,7 @@ let {
   onRefreshInbox = () => {},
   onCopyOtpFromMessage = () => {},
   loadMoreEmails = () => {},
+  highlightedEmailId = '',
 } = $props<{
   displayedEmails?: Email[];
   filteredEmails?: Email[];
@@ -26,6 +27,7 @@ let {
   onRefreshInbox?: () => Promise<void>;
   onCopyOtpFromMessage?: (otp: string) => void;
   loadMoreEmails?: () => void;
+  highlightedEmailId?: string;
 }>();
 
 // Pull-to-refresh state
@@ -33,10 +35,38 @@ let pullToRefresh = $state(false);
 let pullDistance = $state(0);
 let startY = $state(0);
 let isPulling = $state(false);
+
+// Extract domain from email address
+function getDomainFromEmail(email: string): string {
+  const match = email.match(/@([^@]+)$/);
+  return match ? match[1] : '';
+}
+
+// Get root domain (strips subdomains)
+function getRootDomain(domain: string): string {
+  const parts = domain.split('.');
+  return parts.length > 2 ? parts.slice(-2).join('.') : domain;
+}
+
+// Get favicon URL for a domain
+function getFaviconUrl(domain: string): string {
+  if (!domain) return '';
+  return `https://${domain}/favicon.ico`;
+}
+
+// Extract display name from email address
+function getDisplayName(email: string, name?: string): string {
+  if (name) return name;
+  if (!email) return 'Unknown';
+  const localPart = email.split('@')[0];
+  // Convert john.doe or john_doe to "John Doe"
+  return localPart.replace(/[._]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
 </script>
 
 <div
-  class="flex-1 px-3 border-t border-base-200 overflow-y-auto relative"
+  class="flex-1 px-1 border-t border-base-200 overflow-y-auto relative"
+  style="max-height: 300px; padding-bottom: 120px; scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent;"
   role="region"
   aria-label="Email list"
   ontouchstart={(e) => {
@@ -116,46 +146,71 @@ let isPulling = $state(false);
     </div>
   {:else}
     {#each displayedEmails as mail, index}
-      <button 
-        class="w-full text-left py-2.5 border-b border-base-200 hover:bg-base-200 px-2 rounded-lg bg-transparent border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20" 
+      <button
+        class="w-full text-left border-0 bg-transparent focus:outline-none hover:bg-base-200/40 transition-colors duration-150 {mail.id === highlightedEmailId ? 'bg-primary/5' : ''}"
         onclick={() => onOpenMessageDetail(mail)}
         onkeydown={(e) => {
-          if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            const next = e.currentTarget.nextElementSibling as HTMLElement;
-            next?.focus();
-          } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            const prev = e.currentTarget.previousElementSibling as HTMLElement;
-            prev?.focus();
-          }
+          if (e.key === 'ArrowDown') { e.preventDefault(); (e.currentTarget.nextElementSibling as HTMLElement)?.focus(); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); (e.currentTarget.previousElementSibling as HTMLElement)?.focus(); }
         }}
         aria-label={`Email from ${mail.from}: ${mail.subject}`}
         tabindex="0"
       >
-        <div class="flex justify-between text-xs text-base-content/60 mb-1">
-          <div class="flex items-center gap-2 min-w-0 flex-1">
-            <span class="font-medium truncate">{mail.from}</span>
+        <div class="flex items-center gap-2 px-0 py-00.5 border-b border-base-200/50">
+
+          <!-- Indigo unread dot -->
+          <div class="flex-shrink-0 w-2 flex items-center justify-center">
             {#if mail.unread}
-              <span class="badge badge-xs badge-primary">New</span>
+              <span class="w-2 h-2 rounded-full bg-primary"></span>
+            {:else}
+              <span class="w-2 h-2"></span>
             {/if}
           </div>
-          <span class="flex-shrink-0">{mail.time}</span>
+
+          <!-- Dark rounded square avatar (40px, dark bg, large favicon) -->
+          <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-base-content overflow-hidden flex items-center justify-center">
+            {#if mail.from}
+              <img
+                src={`https://www.google.com/s2/favicons?sz=32&domain=${getRootDomain(getDomainFromEmail(mail.from))}`}
+                alt=""
+                class="object-cover"
+                loading="lazy"
+                onerror={(e) => {
+                  const img = e.target as HTMLImageElement;
+                  img.style.display = 'none';
+                  const letter = (mail.from_name || mail.from || '?')[0].toUpperCase();
+                  if (img.parentElement) {
+                    img.parentElement.innerHTML = `<span class="text-base-100 text-lg font-bold">${letter}</span>`;
+                  }
+                }}
+              />
+            {:else}
+              <span class="text-base-100 text-lg font-bold">?</span>
+            {/if}
+          </div>
+
+          <!-- Text -->
+          <div class="flex flex-col flex-1 min-w-0">
+            <div class="flex items-baseline justify-between gap-2 mb-0.5">
+              <span class="text-sm font-bold text-base-content truncate leading-tight">{getDisplayName(mail.from || '', mail.from_name)}</span>
+              <span class="text-[10px] font-medium text-base-content/40 flex-shrink-0">{mail.time}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <p class="text-xs text-base-content/50 truncate leading-tight flex-1">{mail.subject || '(no subject)'}</p>
+              {#if mail.isOtp}
+                <span
+                  class="badge badge-xs badge-info cursor-pointer hover:badge-info/80 transition-colors flex-shrink-0"
+                  role="button"
+                  tabindex="0"
+                  onclick={(e) => { e.stopPropagation(); onCopyOtpFromMessage(mail.otp); }}
+                  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onCopyOtpFromMessage(mail.otp); } }}
+                  aria-label={`Copy OTP code ${mail.otp}`}
+                >OTP: {mail.otp}</span>
+              {/if}
+            </div>
+          </div>
+
         </div>
-        <div class="text-sm font-medium text-base-content truncate mb-0.5">{mail.subject}</div>
-        <div class="text-xs text-base-content/50 truncate">{mail.snippet}</div>
-        {#if mail.isOtp}
-          <span 
-            class="badge badge-xs badge-info mt-1.5 cursor-pointer hover:badge-info/80 transition-colors" 
-            role="button" 
-            tabindex="0"
-            onclick={(e) => { e.stopPropagation(); onCopyOtpFromMessage(mail.otp); }}
-            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onCopyOtpFromMessage(mail.otp); } }}
-            aria-label={`Copy OTP code ${mail.otp}`}
-          >
-            OTP: {mail.otp}
-          </span>
-        {/if}
       </button>
     {/each}
     {#if displayedEmailCount < filteredEmails.length}

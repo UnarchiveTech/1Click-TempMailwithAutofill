@@ -8,6 +8,12 @@ import IconPlus from '@/components/icons/IconPlus.svelte';
 import IconX from '@/components/icons/IconX.svelte';
 import TagDialog from '@/components/overlays/TagDialog.svelte';
 import { updateInboxTag } from '@/features/account/tag-actions.js';
+import {
+  DEFAULT_PROVIDER,
+  loadAllProviderConfigs,
+  loadProviderConfig,
+} from '@/services/email-service.js';
+import { getSelectedProviderInstance } from '@/utils/instance-manager.js';
 import type { Account } from '@/utils/types.js';
 import AccountCard from './AccountCard.svelte';
 
@@ -17,31 +23,31 @@ let {
   allAccounts = [],
   onSelectAccount = () => {},
   onEditAccount = () => {},
-  onExtendAccount = () => {},
+  onCreateInbox = () => {},
+  onNavigateToManage = () => {},
+  onReloadAccounts = async () => {},
+  onNavigateToSettings = () => {},
+  onCreateInboxWithProvider = () => {},
+  onToggleAutoExtend = () => {},
   onArchiveAccount = () => {},
   onUnarchiveAccount = () => {},
   onRemoveAccount = () => {},
-  onCreateInbox = () => {},
-  onNavigateToManage = () => {},
-  onReloadAccounts = () => {},
-  onNavigateToSettings = () => {},
-  onCreateInboxWithProvider = (provider: string, instanceId?: string) => {},
-} = $props<{
+}: {
   selectedEmail?: string;
   accounts?: Account[];
   allAccounts?: Account[];
-  onSelectAccount?: (address: string) => void;
+  onSelectAccount?: (email: string) => void;
   onEditAccount?: (account: Account) => void;
-  onExtendAccount?: (account: Account) => void;
-  onArchiveAccount?: (account: Account) => void;
-  onUnarchiveAccount?: (account: Account) => void;
-  onRemoveAccount?: (address: string) => void;
-  onCreateInbox?: () => void;
+  onCreateInbox?: (provider?: string, instanceId?: string) => void;
   onNavigateToManage?: () => void;
   onReloadAccounts?: () => Promise<void>;
   onNavigateToSettings?: () => void;
-  onCreateInboxWithProvider?: (provider: string) => void;
-}>();
+  onCreateInboxWithProvider?: (provider: string, instanceId?: string) => void;
+  onToggleAutoExtend?: (account: Account) => void;
+  onArchiveAccount?: (account: Account) => void;
+  onUnarchiveAccount?: (account: Account) => void;
+  onRemoveAccount?: (address: string) => void;
+} = $props();
 
 // Dropdown state
 let dropdownOpen = $state(false);
@@ -55,6 +61,15 @@ let domainMenuPosition = $state({ x: 0, y: 0 });
 // Tag editing state
 let tagDialogOpen = $state(false);
 let tagTargetAccount = $state<Account | null>(null);
+
+// Load providers dynamically
+let allProviders = $derived.by(() => {
+  try {
+    return Object.values(loadAllProviderConfigs());
+  } catch {
+    return [];
+  }
+});
 
 function toggleSection(section: 'active' | 'archived' | 'expired') {
   openSection = openSection === section ? null : section;
@@ -109,8 +124,8 @@ function goToNext() {
   }
 }
 
-async function updateTag(accountId: string, tag: string) {
-  await updateInboxTag(accountId, tag, browser, { onReloadAccounts });
+async function updateTag(accountId: string, tag: string, color?: string) {
+  await updateInboxTag(accountId, tag, browser, { onReloadAccounts }, color);
 }
 
 function openTagDialog() {
@@ -129,16 +144,16 @@ function closeTagDialog() {
   tagTargetAccount = null;
 }
 
-function saveTag(tag: string) {
+function saveTag(tag: string, color: string) {
   if (!tagTargetAccount) return;
-  updateTag(tagTargetAccount.id, tag);
+  updateTag(tagTargetAccount.id, tag, color);
   closeTagDialog();
 }
 </script>
 
-<div class="px-2">
+<div class="px-1">
   <!-- Custom dropdown trigger -->
-  <div class="relative mt-3 flex items-center gap-2">
+  <div class="relative mt-1 flex items-center gap-2">
     <!-- Floating status label above border -->
     {#if currentAccount}
       <div class="absolute left-3" style="top: -10px; z-index: 10;">
@@ -152,7 +167,7 @@ function saveTag(tag: string) {
     >
       <!-- Prev button -->
       <button
-        class="shrink-0 w-5 h-5 flex items-center justify-center rounded text-base-content/40 hover:text-base-content transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+        class="shrink-0 w-5 h-5 flex items-center justify-center rounded text-primary hover:text-primary/80 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
         onclick={(e) => { e.stopPropagation(); goToPrev(); }}
         disabled={currentIndexInStatus <= 0}
         aria-label="Previous address"
@@ -170,7 +185,7 @@ function saveTag(tag: string) {
         <span class="tooltip tooltip-bottom" data-tip={selectedEmail}>{selectedEmail}</span>
       </button>
 
-      <!-- Edit button (all providers) -->
+      <!-- Edit button (Guerrilla Mail only) -->
       {#if currentAccount?.provider === 'guerrilla'}
         <button
           class="p-1 hover:bg-base-200 rounded-full shrink-0 text-base-content/40 hover:text-base-content transition-colors"
@@ -188,7 +203,7 @@ function saveTag(tag: string) {
 
       <!-- Next button -->
       <button
-        class="shrink-0 w-5 h-5 flex items-center justify-center rounded text-base-content/40 hover:text-base-content transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+        class="shrink-0 w-5 h-5 flex items-center justify-center rounded text-primary hover:text-primary/80 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
         onclick={(e) => { e.stopPropagation(); goToNext(); }}
         disabled={currentIndexInStatus >= currentStatusAccounts.length - 1}
         aria-label="Next address"
@@ -201,7 +216,7 @@ function saveTag(tag: string) {
 
       <!-- Dropdown chevron -->
       <button
-        class="shrink-0 p-0.5 text-base-content/50 hover:text-primary transition-colors"
+        class="shrink-0 p-0.5 text-primary hover:text-primary/80 transition-colors"
         onclick={() => dropdownOpen = !dropdownOpen}
         aria-label="Open account list"
       >
@@ -210,48 +225,59 @@ function saveTag(tag: string) {
     </div>
     <!-- Plus button - outside pill -->
     <button
-      class="btn btn-xs btn-square rounded-lg bg-primary/10 hover:bg-primary/20 border-0 shrink-0"
+      class="btn btn-xs btn-square rounded-lg bg-primary hover:bg-primary/90 border-0 shrink-0"
       aria-label="Generate new address"
-      onclick={() => onCreateInbox()}
+      onclick={async () => {
+        const provider = currentAccount?.provider || DEFAULT_PROVIDER;
+        const selectedInstance = await getSelectedProviderInstance(provider);
+        if (selectedInstance?.id && selectedInstance.id !== 'random') {
+          onCreateInbox(provider, selectedInstance.id);
+        } else {
+          onCreateInbox();
+        }
+      }}
       oncontextmenu={(e) => {
         e.preventDefault();
         domainMenuPosition = { x: e.clientX - 200, y: e.clientY + 10 };
         domainMenuOpen = true;
       }}
     >
-      <IconPlus class="w-4 h-4 text-primary" />
+      <IconPlus class="w-4 h-4 text-primary-content" />
     </button>
 
     <!-- Domain context menu -->
     {#if domainMenuOpen}
       <button class="fixed inset-0 z-40 bg-transparent cursor-default" aria-label="Close menu" onclick={() => domainMenuOpen = false}></button>
       <div 
-        class="fixed z-50 bg-base-100 rounded-xl shadow-2xl border border-base-300 py-2 w-56"
+        class="fixed z-50 bg-base-100 rounded-xl shadow-2xl border border-base-300 py-2 w-56 max-h-96 overflow-y-auto"
         style="left: {domainMenuPosition.x}px; top: {domainMenuPosition.y}px;"
       >
-        <div class="px-3 py-1.5">
-          <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wider">Guerrilla Mail</p>
-        </div>
-        <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2" onclick={() => { onCreateInboxWithProvider('guerrilla'); domainMenuOpen = false; }}>
-          <IconEnvelope class="w-4 h-4 text-orange-500" />
-          Guerrilla Mail
-        </button>
-        <div class="border-t border-base-200 my-1"></div>
-        <div class="px-3 py-1.5">
-          <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wider">Burner.kiwi Instances</p>
-        </div>
-        <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2" onclick={() => { onCreateInboxWithProvider('burner', 'alphac'); domainMenuOpen = false; }}>
-          <IconFlame class="w-4 h-4 text-blue-500" />
-          Alphac Mail
-        </button>
-        <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2" onclick={() => { onCreateInboxWithProvider('burner', 'raceco'); domainMenuOpen = false; }}>
-          <IconFlame class="w-4 h-4 text-blue-500" />
-          Raceco Mail
-        </button>
-        <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2" onclick={() => { onCreateInboxWithProvider('burner', 'burnerkiwi'); domainMenuOpen = false; }}>
-          <IconFlame class="w-4 h-4 text-blue-500" />
-          Burner.Kiwi
-        </button>
+        {#each allProviders as provider}
+          <div class="px-3 py-1.5">
+            <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wider">{provider.displayName}</p>
+          </div>
+          <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2" onclick={() => { onCreateInboxWithProvider(provider.id); domainMenuOpen = false; }}>
+            {#if (provider as any).ui?.icon === 'envelope'}
+              <IconEnvelope class="w-4 h-4 {(provider as any).ui?.color || 'text-primary'}" />
+            {:else if (provider as any).ui?.icon === 'flame'}
+              <IconFlame class="w-4 h-4 {(provider as any).ui?.color || 'text-primary'}" />
+            {/if}
+            {provider.displayName}
+          </button>
+          {#if provider.multiInstance?.enabled && provider.multiInstance.instances}
+            {#each provider.multiInstance.instances as instance}
+              <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2 pl-8" onclick={() => { onCreateInboxWithProvider(provider.id, instance.id); domainMenuOpen = false; }}>
+                {#if (provider as any).ui?.icon === 'flame'}
+                  <IconFlame class="w-4 h-4 {(provider as any).ui?.color || 'text-primary'}" />
+                {/if}
+                {instance.displayName || instance.name}
+              </button>
+            {/each}
+          {/if}
+          {#if provider !== allProviders[allProviders.length - 1]}
+            <div class="border-t border-base-200 my-1"></div>
+          {/if}
+        {/each}
         <div class="border-t border-base-200 my-1"></div>
         <button 
           class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2 text-base-content" 
@@ -325,7 +351,16 @@ function saveTag(tag: string) {
           <!-- Generate New Mail Address button -->
           <button
             class="w-full px-3 py-2 text-left hover:bg-primary hover:text-primary-content text-sm flex items-center gap-2 text-base-content/60 rounded-lg transition-colors"
-            onclick={() => { dropdownOpen = false; onCreateInbox(); }}
+            onclick={async () => {
+              dropdownOpen = false;
+              const provider = currentAccount?.provider || DEFAULT_PROVIDER;
+              const selectedInstance = await getSelectedProviderInstance(provider);
+              if (selectedInstance?.id && selectedInstance.id !== 'random') {
+                onCreateInbox(provider, selectedInstance.id);
+              } else {
+                onCreateInbox();
+              }
+            }}
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -353,7 +388,7 @@ function saveTag(tag: string) {
                         {account}
                         {selectedEmail}
                         onSelectAccount={(address) => { onSelectAccount(address); dropdownOpen = false; }}
-                        onExtendAccount={onExtendAccount}
+                        onToggleAutoExtend={onToggleAutoExtend}
                         onArchiveAccount={onArchiveAccount}
                         onUnarchiveAccount={onUnarchiveAccount}
                         onEditAccount={onEditAccount}
@@ -443,12 +478,18 @@ function saveTag(tag: string) {
   <TagDialog
     open={tagDialogOpen}
     currentTag={tagTargetAccount.tag || ''}
+    currentTagColor={tagTargetAccount.tagColor || null}
     onClose={closeTagDialog}
     onSave={saveTag}
     existingTags={Array.from(
       new Set(
         allAccounts.map((a: Account) => a.tag).filter((tag: string | undefined): tag is string => !!tag)
       )
+    )}
+    tagColors={Object.fromEntries(
+      allAccounts
+        .filter((a: Account) => a.tag && a.tagColor)
+        .map((a: Account) => [a.tag!, a.tagColor!])
     )}
   />
 {/if}

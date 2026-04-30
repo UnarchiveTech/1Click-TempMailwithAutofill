@@ -1,7 +1,7 @@
 <script lang="ts">
 let {
   searchQuery = '',
-  sortBy = 'date',
+  sortBy = 'newest',
   otpOnly = false,
   senderDomain = '',
   dateFrom = '',
@@ -27,7 +27,16 @@ let saveFilterName = $state('');
 let showSaveFilter = $state(false);
 </script>
 
-<div class="flex items-center gap-1.5 px-2 pt-1 pb-1">
+<!-- Backdrop to close filter dropdown when clicking outside -->
+{#if filterOpen}
+  <button
+    class="fixed inset-0 z-10 cursor-default bg-transparent border-0"
+    aria-label="Close filters"
+    onclick={() => filterOpen = false}
+  ></button>
+{/if}
+
+<div class="flex items-center gap-1.5 px-1 pt-2 pb-1 relative">
   <!-- Search input with search icon left + filter button inside right -->
   <div class="relative flex-1">
     <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -36,7 +45,7 @@ let showSaveFilter = $state(false);
     <input
       type="text"
       placeholder="Search emails..."
-      class="input input-bordered input-sm w-full pl-8 pr-8 text-sm rounded-xl"
+      class="input input-bordered input-sm w-full pl-8 pr-8 text-sm rounded-xl bg-base-200/50 focus:bg-base-100 transition-colors"
       aria-label="Search emails"
       bind:value={searchQuery}
       oninput={(e) => onSearchChange((e.target as HTMLInputElement).value)}
@@ -58,146 +67,135 @@ let showSaveFilter = $state(false);
     </div>
   </div>
 
-  <!-- Filter dropdown anchor (positioned relative to search bar) -->
-  <div class="relative w-0 h-0">
-
-    {#if filterOpen}
-      <!-- Backdrop to close -->
-      <button
-        class="fixed inset-0 z-10 cursor-default bg-transparent border-0"
-        aria-label="Close filters"
-        onclick={() => filterOpen = false}
-      ></button>
-
-      <!-- Filter dropdown panel -->
-      <div class="absolute right-0 top-2 w-64 bg-base-100 border border-base-300 rounded-lg shadow-xl z-20 overflow-hidden p-3 space-y-3">
-        <!-- Sort by -->
-        <div>
-          <label class="text-xs font-medium text-base-content/70 mb-1 block" for="sort-select">Sort by</label>
-          <select id="sort-select" class="select select-bordered select-xs w-full" bind:value={sortBy} onchange={(e) => onSortChange((e.target as HTMLSelectElement).value)}>
-            <option value="date">Date</option>
-            <option value="sender">Sender</option>
-          </select>
-        </div>
-
-        <!-- OTP only -->
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" class="checkbox checkbox-xs" aria-label="Show only OTP emails" bind:checked={otpOnly} onchange={(e) => onOtpOnlyChange((e.target as HTMLInputElement).checked)} />
-          <span class="text-sm">OTP only</span>
-        </label>
-
-        <!-- Sender domain filter -->
-        <div>
-          <label class="text-xs font-medium text-base-content/70 mb-1 block" for="sender-domain">Sender domain</label>
-          <input
-            id="sender-domain"
-            type="text"
-            placeholder="e.g., gmail.com"
-            class="input input-bordered input-xs w-full"
-            aria-label="Filter by sender domain"
-            bind:value={senderDomain}
-            oninput={(e) => onSenderDomainChange((e.target as HTMLInputElement).value)}
-          />
-        </div>
-
-        <!-- Date range filter -->
-        <div class="space-y-2">
-          <span class="text-xs font-medium text-base-content/70 block">Date range</span>
-          <div class="flex gap-2">
-            <div class="flex-1">
-              <input
-                type="date"
-                class="input input-bordered input-xs w-full"
-                aria-label="Filter emails from this date"
-                placeholder="From"
-                bind:value={dateFrom}
-                onchange={(e) => onDateFromChange((e.target as HTMLInputElement).value)}
-              />
-            </div>
-            <div class="flex-1">
-              <input
-                type="date"
-                class="input input-bordered input-xs w-full"
-                aria-label="Filter emails until this date"
-                placeholder="To"
-                bind:value={dateTo}
-                onchange={(e) => onDateToChange((e.target as HTMLInputElement).value)}
-              />
-            </div>
-          </div>
-        </div>
-
-        <!-- Clear filters -->
-        <button class="btn btn-xs btn-ghost w-full mt-2" aria-label="Clear all filters" onclick={() => { onClearFilters(); filterOpen = false; }}>
-          Clear Filters
-        </button>
-
-        <!-- Save current filter -->
-        <button class="btn btn-xs btn-outline w-full" aria-label="Save current filter" onclick={() => showSaveFilter = true}>
-          Save Filter
-        </button>
-
-        {#if showSaveFilter}
-          <div class="mt-2 space-y-2">
-            <input
-              type="text"
-              placeholder="Filter name"
-              class="input input-bordered input-xs w-full"
-              aria-label="Enter filter name"
-              bind:value={saveFilterName}
-            />
-            <div class="flex gap-2">
-              <button
-                class="btn btn-xs btn-primary flex-1"
-                aria-label="Save filter"
-                onclick={() => {
-                  if (saveFilterName.trim()) {
-                    onSaveFilter(saveFilterName.trim());
-                    saveFilterName = '';
-                    showSaveFilter = false;
-                  }
-                }}
-              >
-                Save
-              </button>
-              <button
-                class="btn btn-xs btn-ghost flex-1"
-                aria-label="Cancel saving filter"
-                onclick={() => { saveFilterName = ''; showSaveFilter = false; }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        {/if}
-
-        <!-- Saved filters -->
-        {#if savedSearchFilters.length > 0}
-          <div class="divider my-2"></div>
-          <span class="text-xs font-medium text-base-content/70 block mb-2">Saved Filters</span>
-          <div class="space-y-1 max-h-32 overflow-y-auto">
-            {#each savedSearchFilters as filter}
-              <div class="flex items-center justify-between gap-2 text-xs">
-                <button
-                  class="flex-1 text-left hover:underline truncate"
-                  onclick={() => { onLoadFilter(filter); filterOpen = false; }}
-                >
-                  {filter.name}
-                </button>
-                <button
-                  class="btn btn-xs btn-ghost btn-square text-error"
-                  aria-label="Delete filter"
-                  onclick={() => onDeleteFilter(filter.id)}
-                >
-                  ×
-                </button>
-              </div>
-            {/each}
-          </div>
-        {/if}
+  <!-- Filter dropdown positioned relative to main flex container -->
+  {#if filterOpen}
+    <div class="absolute right-0 top-10 w-[350px] bg-base-100 border border-base-300 rounded-lg shadow-xl z-20 overflow-hidden p-3 space-y-3">
+      <!-- Sort by -->
+      <div>
+        <label class="text-xs font-medium text-base-content/70 mb-1 block" for="sort-select">Sort by</label>
+        <select id="sort-select" class="select select-bordered select-xs w-full" bind:value={sortBy} onchange={(e) => onSortChange((e.target as HTMLSelectElement).value)}>
+          <option value="date">Date</option>
+          <option value="sender">Sender</option>
+        </select>
       </div>
-    {/if}
-  </div>
+
+      <!-- OTP only -->
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" class="checkbox checkbox-xs" aria-label="Show only OTP emails" bind:checked={otpOnly} onchange={(e) => onOtpOnlyChange((e.target as HTMLInputElement).checked)} />
+        <span class="text-sm">OTP only</span>
+      </label>
+
+      <!-- Sender domain filter -->
+      <div>
+        <label class="text-xs font-medium text-base-content/70 mb-1 block" for="sender-domain">Sender domain</label>
+        <input
+          id="sender-domain"
+          type="text"
+          placeholder="e.g., gmail.com"
+          class="input input-bordered input-xs w-full"
+          aria-label="Filter by sender domain"
+          bind:value={senderDomain}
+          oninput={(e) => onSenderDomainChange((e.target as HTMLInputElement).value)}
+        />
+      </div>
+
+      <!-- Date range filter -->
+      <div class="space-y-2">
+        <span class="text-xs font-medium text-base-content/70 block">Date range</span>
+        <div class="flex gap-2">
+          <div class="flex-1">
+            <input
+              type="date"
+              class="input input-bordered input-xs w-full"
+              aria-label="Filter emails from this date"
+              placeholder="From"
+              bind:value={dateFrom}
+              onchange={(e) => onDateFromChange((e.target as HTMLInputElement).value)}
+            />
+          </div>
+          <div class="flex-1">
+            <input
+              type="date"
+              class="input input-bordered input-xs w-full"
+              aria-label="Filter emails until this date"
+              placeholder="To"
+              bind:value={dateTo}
+              onchange={(e) => onDateToChange((e.target as HTMLInputElement).value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Clear filters -->
+      <button class="btn btn-xs btn-ghost w-full mt-2" aria-label="Clear all filters" onclick={() => { onClearFilters(); filterOpen = false; }}>
+        Clear Filters
+      </button>
+
+      <!-- Save current filter -->
+      <button class="btn btn-xs btn-outline w-full" aria-label="Save current filter" onclick={() => showSaveFilter = true}>
+        Save Filter
+      </button>
+
+      {#if showSaveFilter}
+        <div class="mt-2 space-y-2">
+          <input
+            type="text"
+            placeholder="Filter name"
+            class="input input-bordered input-xs w-full"
+            aria-label="Enter filter name"
+            bind:value={saveFilterName}
+          />
+          <div class="flex gap-2">
+            <button
+              class="btn btn-xs btn-primary flex-1"
+              aria-label="Save filter"
+              onclick={() => {
+                if (saveFilterName.trim()) {
+                  onSaveFilter(saveFilterName.trim());
+                  saveFilterName = '';
+                  showSaveFilter = false;
+                }
+              }}
+            >
+              Save
+            </button>
+            <button
+              class="btn btn-xs btn-ghost flex-1"
+              aria-label="Cancel saving filter"
+              onclick={() => { saveFilterName = ''; showSaveFilter = false; }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Saved filters -->
+      {#if savedSearchFilters.length > 0}
+        <div class="divider my-2"></div>
+        <span class="text-xs font-medium text-base-content/70 block mb-2">Saved Filters</span>
+        <div class="space-y-1 max-h-32 overflow-y-auto">
+          {#each savedSearchFilters as filter}
+            <div class="flex items-center justify-between gap-2 text-xs">
+              <button
+                class="flex-1 text-left hover:underline truncate"
+                onclick={() => { onLoadFilter(filter); filterOpen = false; }}
+              >
+                {filter.name}
+              </button>
+              <button
+                class="btn btn-xs btn-ghost btn-square text-error"
+                aria-label="Delete filter"
+                onclick={() => onDeleteFilter(filter.id)}
+              >
+                ×
+              </button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   <!-- Refresh button -->
   <button

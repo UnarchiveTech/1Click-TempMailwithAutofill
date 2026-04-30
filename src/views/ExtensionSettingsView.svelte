@@ -1,5 +1,6 @@
 <script lang="ts">
 import { browser } from 'wxt/browser';
+import IconArchive from '@/components/icons/IconArchive.svelte';
 import IconMail from '@/components/icons/IconMail.svelte';
 import IconPlus from '@/components/icons/IconPlus.svelte';
 import IconSettings from '@/components/icons/IconSettings.svelte';
@@ -7,7 +8,9 @@ import IconSun from '@/components/icons/IconSun.svelte';
 import IconUser from '@/components/icons/IconUser.svelte';
 import IconX from '@/components/icons/IconX.svelte';
 import ConfirmDialog from '@/components/overlays/ConfirmDialog.svelte';
-import type { BurnerInstance } from '@/utils/types.js';
+import { getAllProviderConfigs, loadProviderConfig } from '@/services/email-service.js';
+import * as PingService from '@/services/ping-service.js';
+import type { ProviderInstance } from '@/utils/types.js';
 
 let {
   context = 'popup',
@@ -19,7 +22,7 @@ let {
   customLastName = '',
   autoCopy = false,
   autoRenew = false,
-  selectedProvider = 'burner',
+  selectedProvider = '',
   savingSettings = false,
   loading = false,
   onSaveSettings = () => {},
@@ -31,14 +34,14 @@ let {
   onSetAutoCopy = undefined,
   onSetAutoRenew = undefined,
   onHardReset = () => {},
-  burnerInstances = [],
-  selectedBurnerInstance = null,
-  onSetBurnerInstance = () => {},
+  providerInstances = [],
+  selectedProviderInstance = null,
+  onSetProviderInstance = () => {},
   onExportData = () => {},
   onImportData = () => {},
   onProviderChange = () => {},
   onAddCustomInstance = () => {},
-  onLoadBurnerInstances = () => {},
+  onLoadProviderInstances = () => {},
   customColor = '',
   onColorChange = () => {},
   showDeveloperSettings = false,
@@ -67,14 +70,14 @@ let {
   onSetAutoCopy?: (value: boolean) => void;
   onSetAutoRenew?: (value: boolean) => void;
   onHardReset?: () => void;
-  burnerInstances?: BurnerInstance[];
-  selectedBurnerInstance?: string | null;
-  onSetBurnerInstance?: (instanceId: string) => void;
+  providerInstances?: ProviderInstance[];
+  selectedProviderInstance?: string | null;
+  onSetProviderInstance?: (instanceId: string) => void;
   onExportData?: () => void;
   onImportData?: () => void;
   onProviderChange?: (provider: string) => void;
   onAddCustomInstance?: (name: string, url: string) => void;
-  onLoadBurnerInstances?: () => void;
+  onLoadProviderInstances?: () => void;
   customColor?: string;
   onColorChange?: (color: string) => void;
   showDeveloperSettings?: boolean;
@@ -88,6 +91,11 @@ let customInstanceName = $state('');
 let customInstanceUrl = $state('');
 let confirmDialog = $state<{ message: string; onConfirm: () => void } | null>(null);
 let confirmDialogRef = $state<HTMLElement | null>(null);
+let allProviders = $derived.by(() => getAllProviderConfigs());
+
+// Ping state
+let providerPingResults = $state(new Map<string, Map<string, number | 'timeout'>>());
+let pinging = $state(false);
 
 function showConfirmDialog(message: string, onConfirm: () => void) {
   confirmDialog = { message, onConfirm };
@@ -106,14 +114,16 @@ async function handleProviderChange(e: Event) {
   await browser.storage.local.set({ selectedProvider: provider });
   await browser.runtime.sendMessage({ action: 'setProvider', provider });
   onProviderChange(provider);
-  if (provider === 'burner') {
-    await onLoadBurnerInstances();
+  const config = loadProviderConfig(provider);
+  if (config.multiInstance?.enabled) {
+    await onLoadProviderInstances();
   }
 }
 
 $effect(() => {
-  if (selectedProvider === 'burner') {
-    onLoadBurnerInstances();
+  const config = loadProviderConfig(selectedProvider);
+  if (config.multiInstance?.enabled) {
+    onLoadProviderInstances();
   }
 });
 
@@ -138,10 +148,88 @@ function saveCustomInstance() {
   onAddCustomInstance(name, url);
   hideCustomInstanceForm();
 }
+
+// Dropdown state
+let providerDropdownOpen = $state(false);
+let instanceDropdownOpen = $state(false);
+
+// Ping all providers and instances
+async function pingAllProviders() {
+  if (pinging) return;
+  pinging = true;
+
+  const results = new Map<string, Map<string, number | 'timeout'>>();
+
+  console.log('Starting ping for all providers...');
+  console.log('Provider instances:', providerInstances);
+  console.log('Selected provider:', selectedProvider);
+
+  for (const provider of allProviders) {
+    const providerId = (provider as { id: string }).id;
+    console.log('Pinging provider:', providerId, 'provider:', provider);
+
+    const config = loadProviderConfig(providerId);
+    console.log('Provider config:', config);
+    console.log('Is multi-instance:', config.multiInstance?.enabled);
+    console.log('Has provider instances:', providerInstances.length > 0);
+
+    if (config.multiInstance?.enabled && providerInstances.length > 0) {
+      // Ping instances for multi-instance providers
+      console.log('Multi-instance provider, pinging instances...');
+      const providerWithConfig = {
+        name: (provider as { name: string }).name,
+        displayName: (provider as { displayName: string }).displayName,
+        apiUrl: (provider as { apiUrl: string }).apiUrl,
+        type: (provider as { id: string }).id,
+      };
+      const pingResults = await PingService.pingProviderInstances(
+        providerWithConfig,
+        providerInstances
+      );
+      results.set(providerId, pingResults);
+      console.log('Ping results for', providerId, ':', pingResults);
+      console.log('Ping results size:', pingResults.size);
+    } else {
+      // Ping single-instance providers
+      console.log('Single-instance provider, pinging directly...');
+      const providerWithConfig = {
+        name: (provider as { name: string }).name,
+        displayName: (provider as { displayName: string }).displayName,
+        apiUrl: (provider as { apiUrl: string }).apiUrl,
+        type: (provider as { id: string }).id,
+      };
+      const pingResults = await PingService.pingProviderInstances(providerWithConfig, []);
+      results.set(providerId, pingResults);
+      console.log('Ping results for', providerId, ':', pingResults);
+      console.log('Ping results size:', pingResults.size);
+    }
+  }
+
+  providerPingResults = results;
+  console.log('Final ping results map:', providerPingResults);
+  console.log('Map keys:', Array.from(providerPingResults.keys()));
+  pinging = false;
+}
+
+/**
+ * Get ping dot emoji based on latency
+ */
+function getPingDot(ping: number | 'timeout'): string {
+  if (ping === 'timeout') return '🔴';
+  if (ping < 100) return '🟢';
+  if (ping < 300) return '🟡';
+  return '🔴';
+}
+$effect(() => {
+  // Small delay to ensure props are loaded
+  setTimeout(() => {
+    pingAllProviders();
+  }, 100);
+});
 </script>
 
 {#if loading}
-  <div class="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+  <div class="flex-1 overflow-y-auto px-4 py-4 space-y-4" style="scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent;">
     {#each [1,2,3,4,5] as _}
       <div class="rounded-xl bg-base-100 p-4 space-y-2 animate-pulse">
         <div class="h-3 w-24 bg-base-300 rounded"></div>
@@ -150,13 +238,30 @@ function saveCustomInstance() {
     {/each}
   </div>
 {:else}
-<div class="flex-1 overflow-y-auto px-4 py-4 space-y-5 pb-20">
+<div class="flex-1 overflow-y-auto px-4 py-4 space-y-5 pb-20" style="scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent;">
 
   <!-- Page heading -->
   <div class="pt-1">
     <h1 class="text-lg font-bold text-base-content">Preferences</h1>
     <p class="text-xs text-base-content/50 mt-0.5">Configure your extension identity.</p>
   </div>
+
+  <!-- ── General ── -->
+  <section class="space-y-2">
+    <div class="flex items-center gap-2 mb-1">
+      <IconSettings class="w-4 h-4 text-primary" />
+      <span class="text-sm font-semibold text-base-content">General</span>
+    </div>
+
+    <!-- Auto-Copy row -->
+    <div class="bg-base-100 rounded-xl px-4 py-3 flex items-center justify-between">
+      <div>
+        <div class="text-sm font-medium text-base-content">Auto-Copy</div>
+        <div class="text-xs text-base-content/50">Copy to clipboard after generation</div>
+      </div>
+      <input type="checkbox" class="toggle toggle-primary toggle-sm" aria-label="Toggle auto-copy" checked={autoCopy} onchange={(e) => { if (onSetAutoCopy) onSetAutoCopy((e.target as HTMLInputElement).checked); onSaveSettings(); }} />
+    </div>
+  </section>
 
   <!-- ── Identity ── -->
   <section class="space-y-2">
@@ -201,54 +306,168 @@ function saveCustomInstance() {
         </div>
       </div>
     {/if}
+  </section>
 
-    <!-- Auto-Copy row -->
-    <div class="bg-base-100 rounded-xl px-4 py-3 flex items-center justify-between">
-      <div>
-        <div class="text-sm font-medium text-base-content">Auto-Copy</div>
-        <div class="text-xs textbase-content/50">Copy to clipboard after generation</div>
+  <!-- ── Mail ── -->
+  <section class="space-y-2">
+    <div class="flex items-center justify-between mb-1">
+      <div class="flex items-center gap-2">
+        <IconMail class="w-4 h-4 text-primary" />
+        <span class="text-sm font-semibold text-base-content">Mail</span>
       </div>
-      <input type="checkbox" class="toggle toggle-primary toggle-sm" aria-label="Toggle auto-copy" checked={autoCopy} onchange={(e) => { if (onSetAutoCopy) onSetAutoCopy((e.target as HTMLInputElement).checked); onSaveSettings(); }} />
+      <button
+        class="btn btn-ghost btn-xs btn-circle hover:bg-base-200"
+        aria-label="Refresh ping"
+        onclick={() => {
+          providerPingResults.clear();
+          pingAllProviders();
+        }}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="bg-base-100 rounded-xl px-4 py-3">
+      <div class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5">Provider</div>
+      <div class="relative">
+        <button
+          class="w-full bg-transparent text-sm outline-none text-base-content appearance-none cursor-pointer font-medium flex items-center justify-between"
+          onclick={() => providerDropdownOpen = !providerDropdownOpen}
+          aria-label="Select mail provider"
+        >
+          <span>
+            {#each allProviders as provider}
+              {#if (provider as any).id === selectedProvider}
+                {@const pingResults = providerPingResults.get(selectedProvider)}
+                {@const fastestPing = pingResults ? PingService.getFastestPing(pingResults) : null}
+                {provider.displayName}
+                {#if fastestPing !== null && fastestPing !== undefined}
+                  <span class="text-xs text-base-content/50 ml-2">{getPingDot(fastestPing)} {PingService.formatPing(fastestPing)}</span>
+                {:else}
+                  <span class="text-xs text-base-content/50 ml-2">⏳</span>
+                {/if}
+              {/if}
+            {/each}
+          </span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {#if providerDropdownOpen}
+          <div class="absolute top-full left-0 right-0 mt-1 bg-base-100 rounded-xl shadow-lg border border-base-200 z-50 max-h-60 overflow-y-auto">
+            {#each allProviders as provider}
+              {@const providerId = (provider as any).id}
+              {@const pingResults = providerPingResults.get(providerId)}
+              {@const fastestPing = pingResults ? PingService.getFastestPing(pingResults) : null}
+              <button
+                class="w-full px-4 py-2 text-sm text-left hover:bg-base-200 flex items-center justify-between"
+                onclick={() => {
+                  selectedProvider = providerId;
+                  handleProviderChange({ target: { value: providerId } } as any);
+                  providerDropdownOpen = false;
+                }}
+              >
+                <span>{provider.displayName}</span>
+                {#if fastestPing !== null && fastestPing !== undefined}
+                  <span class="text-xs text-base-content/50">{getPingDot(fastestPing)} {PingService.formatPing(fastestPing)}</span>
+                {:else}
+                  <span class="text-xs text-base-content/50">⏳</span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
     </div>
 
     <!-- Auto-Renew row -->
     <div class="bg-base-100 rounded-xl px-4 py-3 flex items-center justify-between">
       <div>
         <div class="text-sm font-medium text-base-content">Auto-Renew</div>
-        <div class="text-xs text-base-content/50">Auto-renew Guerrilla Mail</div>
+        <div class="text-xs text-base-content/50">Auto-renew email before expiry</div>
       </div>
-      <input type="checkbox" class="toggle toggle-primary toggle-sm" aria-label="Toggle auto-renew" checked={autoRenew} onchange={(e) => { if (onSetAutoRenew) onSetAutoRenew((e.target as HTMLInputElement).checked); onSaveSettings(); }} />
-    </div>
-  </section>
-
-  <!-- ── Mail ── -->
-  <section class="space-y-2">
-    <div class="flex items-center gap-2 mb-1">
-      <IconMail class="w-4 h-4 text-primary" />
-      <span class="text-sm font-semibold text-base-content">Mail</span>
-    </div>
-
-    <div class="bg-base-100 rounded-xl px-4 py-3">
-      <div class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5">Provider</div>
-      <select class="w-full bg-transparent text-sm outline-none text-base-content appearance-none cursor-pointer font-medium" aria-label="Select mail provider" value={selectedProvider} onchange={handleProviderChange}>
-        <option value="guerrilla">Guerrilla Mail</option>
-        <option value="burner">Burner.kiwi Instances</option>
-      </select>
+      <button
+        class="btn btn-sm btn-square rounded-xl {autoRenew ? 'bg-primary/10 hover:bg-primary/20 text-primary' : 'bg-base-200 hover:bg-base-300 text-base-content/60'} border-0"
+        aria-label="Toggle auto-renew"
+        onclick={() => { if (onSetAutoRenew) onSetAutoRenew(!autoRenew); onSaveSettings(); }}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </button>
     </div>
 
-    {#if selectedProvider === 'burner'}
+    {#if loadProviderConfig(selectedProvider).multiInstance?.enabled}
       <div class="bg-base-100 rounded-xl px-4 py-3">
         <div class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5">Instance Selection</div>
-        <select class="w-full bg-transparent text-sm outline-none text-base-content appearance-none cursor-pointer font-medium" aria-label="Select burner instance" bind:value={selectedBurnerInstance} onchange={(e) => onSetBurnerInstance((e.target as HTMLSelectElement).value)}>
-          <option value="random">Random Instance (Default)</option>
-          {#each burnerInstances as instance}
-            <option value={instance.id}>{instance.displayName}{instance.isCustom ? ' (Custom)' : ''}</option>
-          {/each}
-        </select>
+        <div class="relative">
+          <button
+            class="w-full bg-transparent text-sm outline-none text-base-content appearance-none cursor-pointer font-medium flex items-center justify-between"
+            onclick={() => instanceDropdownOpen = !instanceDropdownOpen}
+            aria-label="Select provider instance"
+          >
+            <span>
+              {#if selectedProviderInstance === 'random'}
+                Random Instance (Default)
+              {:else}
+                {#each providerInstances as instance}
+                  {#if instance.id === selectedProviderInstance}
+                    {@const pingResults = providerPingResults.get(selectedProvider)}
+                    {@const instancePing = pingResults?.get(instance.id)}
+                    {instance.displayName}{instance.isCustom ? ' (Custom)' : ''}
+                    {#if instancePing !== undefined && instancePing !== null}
+                      <span class="text-xs text-base-content/50 ml-2">{getPingDot(instancePing)} {PingService.formatPing(instancePing)}</span>
+                    {:else}
+                      <span class="text-xs text-base-content/50 ml-2">⏳</span>
+                    {/if}
+                  {/if}
+                {/each}
+              {/if}
+            </span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {#if instanceDropdownOpen}
+            <div class="absolute top-full left-0 right-0 mt-1 bg-base-100 rounded-xl shadow-lg border border-base-200 z-50 max-h-60 overflow-y-auto">
+              <button
+                class="w-full px-4 py-2 text-sm text-left hover:bg-base-200 flex items-center justify-between"
+                onclick={() => {
+                  selectedProviderInstance = 'random';
+                  onSetProviderInstance('random');
+                  instanceDropdownOpen = false;
+                }}
+              >
+                <span>Random Instance (Default)</span>
+              </button>
+              {#each providerInstances as instance}
+                {@const pingResults = providerPingResults.get(selectedProvider)}
+                {@const instancePing = pingResults?.get(instance.id)}
+                <button
+                  class="w-full px-4 py-2 text-sm text-left hover:bg-base-200 flex items-center justify-between"
+                  onclick={() => {
+                    selectedProviderInstance = instance.id;
+                    onSetProviderInstance(instance.id);
+                    instanceDropdownOpen = false;
+                  }}
+                >
+                  <span>{instance.displayName}{instance.isCustom ? ' (Custom)' : ''}</span>
+                  {#if instancePing !== undefined && instancePing !== null}
+                    <span class="text-xs text-base-content/50">{getPingDot(instancePing)} {PingService.formatPing(instancePing)}</span>
+                  {:else}
+                    <span class="text-xs text-base-content/50">⏳</span>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
       </div>
 
       {#if !showCustomInstanceForm}
-        <button class="w-full rounded-xl border-2 border-dashed border-primary/30 py-2.5 flex items-center justify-center gap-2 text-sm text-primary/70 hover:border-primary/60 hover:text-primary transition-colors" aria-label="Add custom burner instance" onclick={showAddCustomInstance}>
+        <button class="w-full rounded-xl border-2 border-dashed border-primary/30 py-2.5 flex items-center justify-center gap-2 text-sm text-primary/70 hover:border-primary/60 hover:text-primary transition-colors" aria-label="Add custom instance" onclick={showAddCustomInstance}>
           <IconPlus class="w-4 h-4" />
           Add instance
         </button>
@@ -340,4 +559,7 @@ function saveCustomInstance() {
 </div>
 {/if}
 
+<ConfirmDialog {confirmDialog} confirmDialogRef={confirmDialogRef} onClose={closeConfirmDialog} />
+
+<ConfirmDialog {confirmDialog} confirmDialogRef={confirmDialogRef} onClose={closeConfirmDialog} />
 <ConfirmDialog {confirmDialog} confirmDialogRef={confirmDialogRef} onClose={closeConfirmDialog} />

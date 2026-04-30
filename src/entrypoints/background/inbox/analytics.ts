@@ -8,9 +8,16 @@ import type { Analytics } from '@/utils/types.js';
 
 export async function initializeAnalytics(): Promise<void> {
   try {
-    const { analytics = {} }: { analytics: Analytics } = (await browser.storage.local.get([
-      'analytics',
-    ])) as { analytics: Analytics };
+    const {
+      analytics = {
+        accountsCreated: 0,
+        emailsReceived: 0,
+        otpsDetected: 0,
+        notificationsSent: 0,
+      },
+    }: { analytics: Analytics } = (await browser.storage.local.get(['analytics'])) as {
+      analytics: Analytics;
+    };
     if (!analytics.createdAt) {
       analytics.createdAt = Date.now();
       analytics.accountsCreated = 0;
@@ -27,9 +34,16 @@ export async function initializeAnalytics(): Promise<void> {
 
 export async function incrementAnalytic(key: keyof Analytics): Promise<void> {
   try {
-    const { analytics = {} }: { analytics: Analytics } = (await browser.storage.local.get([
-      'analytics',
-    ])) as { analytics: Analytics };
+    const {
+      analytics = {
+        accountsCreated: 0,
+        emailsReceived: 0,
+        otpsDetected: 0,
+        notificationsSent: 0,
+      },
+    }: { analytics: Analytics } = (await browser.storage.local.get(['analytics'])) as {
+      analytics: Analytics;
+    };
     (analytics[key] as number) = ((analytics[key] as number) || 0) + 1;
     await browser.storage.local.set({ analytics });
   } catch (error: unknown) {
@@ -38,7 +52,14 @@ export async function incrementAnalytic(key: keyof Analytics): Promise<void> {
 }
 
 export async function getAnalytics(): Promise<Analytics> {
-  const { analytics = {} } = (await browser.storage.local.get(['analytics'])) as {
+  const {
+    analytics = {
+      accountsCreated: 0,
+      emailsReceived: 0,
+      otpsDetected: 0,
+      notificationsSent: 0,
+    },
+  } = (await browser.storage.local.get(['analytics'])) as {
     analytics?: Analytics;
   };
   return analytics;

@@ -2,6 +2,7 @@
 import { browser } from 'wxt/browser';
 import IconArchive from '@/components/icons/IconArchive.svelte';
 import IconAutoRenew from '@/components/icons/IconAutoRenew.svelte';
+import IconChevronDown from '@/components/icons/IconChevronDown.svelte';
 import IconClock from '@/components/icons/IconClock.svelte';
 import IconCopy from '@/components/icons/IconCopy.svelte';
 import IconEnvelope from '@/components/icons/IconEnvelope.svelte';
@@ -16,10 +17,94 @@ import IconTrash from '@/components/icons/IconTrash.svelte';
 import TagDialog from '@/components/overlays/TagDialog.svelte';
 import AccountCard from '@/components/ui/account/AccountCard.svelte';
 import AccountSelector from '@/components/ui/account/AccountSelector.svelte';
+import ExpiryPill from '@/components/ui/ExpiryPill.svelte';
 import EmailList from '@/components/ui/mail/EmailList.svelte';
 import FilterList from '@/components/ui/mail/FilterList.svelte';
+import {
+  DEFAULT_PROVIDER,
+  loadAllProviderConfigs,
+  loadProviderConfig,
+} from '@/services/email-service.js';
 import { logError } from '@/utils/logger.js';
+import { timeAgo } from '@/utils/time.js';
 import type { Account, Email, SavedSearchFilter } from '@/utils/types.js';
+
+let otpCollapsed = $state(false);
+let otpDropupOpen = $state(false);
+
+type OtpHistoryItem = {
+  otp: string;
+  from: string;
+  from_name: string;
+  received_at: number;
+  inboxAddress: string;
+};
+
+let otpHistoryCurrent = $state<OtpHistoryItem[]>([]);
+let otpHistoryOther = $state<OtpHistoryItem[]>([]);
+
+// Load all providers dynamically from config
+let allProviders = $derived.by(() => loadAllProviderConfigs());
+
+async function loadOtpHistory() {
+  try {
+    const { storedEmails = {} } = (await browser.storage.local.get(['storedEmails'])) as {
+      storedEmails?: Record<string, Email[]>;
+    };
+    const current: OtpHistoryItem[] = [];
+    const other: OtpHistoryItem[] = [];
+    for (const [addr, msgs] of Object.entries(storedEmails)) {
+      for (const m of msgs) {
+        if (!m.otp) continue;
+        const item: OtpHistoryItem = {
+          otp: m.otp,
+          from:
+            (m as Email & { from_address?: string }).from_address || m.from || m.from_name || '',
+          from_name: m.from_name || '',
+          received_at: m.received_at,
+          inboxAddress: addr,
+        };
+        if (addr === selectedEmail) {
+          current.push(item);
+        } else {
+          other.push(item);
+        }
+      }
+    }
+    current.sort((a, b) => b.received_at - a.received_at);
+    other.sort((a, b) => b.received_at - a.received_at);
+    otpHistoryCurrent = current;
+    otpHistoryOther = other;
+  } catch {}
+}
+
+function toggleOtpDropup() {
+  otpDropupOpen = !otpDropupOpen;
+  if (otpDropupOpen) loadOtpHistory();
+}
+
+function getRootDomain(domain: string): string {
+  const parts = domain.split('.');
+  return parts.length > 2 ? parts.slice(-2).join('.') : domain;
+}
+
+function getDomainFaviconUrl(sender: string): string {
+  const domain = sender.split('@')[1] || sender;
+  return `https://${domain}/favicon.ico`;
+}
+
+function getRootDomainFaviconUrl(sender: string): string {
+  const domain = sender.split('@')[1] || sender;
+  const root = getRootDomain(domain);
+  return `https://${root}/favicon.ico`;
+}
+
+function formatOtp(otp: string): string {
+  const clean = otp.replace(/\s/g, '');
+  if (clean.length === 6) return `${clean.slice(0, 3)} ${clean.slice(3)}`;
+  if (clean.length === 8) return `${clean.slice(0, 4)} ${clean.slice(4)}`;
+  return otp;
+}
 
 let {
   context = 'popup',
@@ -37,6 +122,8 @@ let {
   filteredEmails = [],
   emails = [],
   latestOtp = '------',
+  latestOtpSender = '',
+  latestOtpSenderName = '',
   otpContext = '',
   formDetected = false,
   savedSearchFilters = [],
@@ -52,7 +139,7 @@ let {
   onRemoveAccount = () => {},
   onReloadAccounts = () => {},
   onEditAccount = () => {},
-  onExtendAccount = () => {},
+  onToggleAutoExtend = () => {},
   onOpenMessageDetail = () => {},
   onClearFilters = () => {},
   onCopyOtp = () => {},
@@ -68,6 +155,8 @@ let {
   onDeleteFilter = () => {},
   onNavigateToSettings = () => {},
   onNavigateToManage = () => {},
+  autoRenew = false,
+  onToggleAutoRenew = () => {},
 } = $props<{
   context?: 'popup' | 'sidepanel' | 'app';
   selectedEmail?: string;
@@ -85,6 +174,8 @@ let {
   filteredEmails?: Email[];
   emails?: Email[];
   latestOtp?: string;
+  latestOtpSender?: string;
+  latestOtpSenderName?: string;
   otpContext?: string;
   formDetected?: boolean;
   savedSearchFilters?: SavedSearchFilter[];
@@ -101,7 +192,7 @@ let {
   onRemoveAccount?: (address: string) => void;
   onReloadAccounts?: () => Promise<void>;
   onEditAccount?: (account: Account) => void;
-  onExtendAccount?: (account: Account) => void;
+  onToggleAutoExtend?: (account: Account) => void;
   onOpenMessageDetail?: (message: Email) => void;
   onClearFilters?: () => void;
   onCopyOtp?: () => void;
@@ -117,7 +208,15 @@ let {
   onDeleteFilter?: (filterId: string) => void;
   onNavigateToSettings?: () => void;
   onNavigateToManage?: () => void;
+  autoRenew?: boolean;
+  onToggleAutoRenew?: () => void;
 }>();
+
+let otpSenderEmail = $derived(
+  emails
+    .filter((e: Email) => e.otp && e.from)
+    .sort((a: Email, b: Email) => b.received_at - a.received_at)[0]?.from ?? latestOtpSender
+);
 
 // Context menu state (for domain selection)
 let domainMenuOpen = $state(false);
@@ -160,10 +259,18 @@ let expiryProgress = $derived.by(() => {
   return percentage;
 });
 
+// Calculate expiry time in minutes for ExpiryPill
+let expiryTimeMinutes = $derived.by(() => {
+  if (!currentAccount?.expiresAt) return 0;
+  const now = Date.now();
+  const remainingMs = currentAccount.expiresAt - now;
+  return Math.max(0, Math.ceil(remainingMs / (60 * 1000)));
+});
+
 // Tag functions
-async function updateTag(accountId: string, tag: string) {
+async function updateTag(accountId: string, tag: string, color?: string) {
   try {
-    await browser.runtime.sendMessage({ type: 'updateInboxTag', inboxId: accountId, tag });
+    await browser.runtime.sendMessage({ type: 'updateInboxTag', inboxId: accountId, tag, color });
     await onReloadAccounts();
   } catch (e) {
     logError('Failed to update tag:', e);
@@ -181,9 +288,9 @@ function closeTagDialog() {
   tagTargetAccount = null;
 }
 
-function saveTag(tag: string) {
+function saveTag(tag: string, color: string) {
   if (!tagTargetAccount) return;
-  updateTag(tagTargetAccount.id, tag);
+  updateTag(tagTargetAccount.id, tag, color);
   closeTagDialog();
 }
 
@@ -195,15 +302,27 @@ let existingTags = $derived.by(() => {
   });
   return Array.from(tags);
 });
+
+// Extract tag colors from all accounts
+let tagColors = $derived.by(() => {
+  const colors: Record<string, string> = {};
+  allAccounts.forEach((a: Account) => {
+    if (a.tag && a.tagColor) {
+      colors[a.tag] = a.tagColor;
+    }
+  });
+  return colors;
+});
 </script>
 
+<div class="relative flex flex-col h-full">
 <AccountSelector
   {selectedEmail}
   {accounts}
   {allAccounts}
   onSelectAccount={onSelectAccount}
   onEditAccount={onEditAccount}
-  onExtendAccount={onExtendAccount}
+  onToggleAutoExtend={onToggleAutoExtend}
   onArchiveAccount={onArchiveAccount}
   onUnarchiveAccount={onUnarchiveAccount}
   onRemoveAccount={onRemoveAccount}
@@ -214,102 +333,72 @@ let existingTags = $derived.by(() => {
   onCreateInboxWithProvider={onCreateInbox}
 />
 
-<!-- Tag and expiry row -->
-{#if currentAccount}
-    <div class="px-2 pb-0.5">
-      <div class="flex items-center gap-2">
-        <!-- Expiry pill -->
-        <div class="relative flex items-center gap-1.5 rounded-full px-2.5 py-1" style="padding: 2px;">
-          <div class="absolute inset-0 rounded-full" style="background: conic-gradient(from -45deg, #22c55e 0%, #22c55e {expiryProgress}%, #ef4444 {expiryProgress}%, #ef4444 100%);"></div>
-          <div class="relative z-10 flex items-center gap-1.5 rounded-full px-2.5 py-1 {currentAccount.autoExtend ? 'bg-primary/10' : currentAccount.status === 'expired' ? 'bg-error/10' : 'bg-base-100'}">
-            <IconClock class="w-3 h-3 {currentAccount.autoExtend ? 'text-primary' : currentAccount.status === 'expired' ? 'text-error' : 'text-base-content/50'}" />
-            <span class="text-xs {currentAccount.autoExtend ? 'text-primary' : currentAccount.status === 'expired' ? 'text-error' : 'text-base-content/50'}">{currentAccount.expiry}</span>
-          </div>
-        </div>
-
-        <!-- Tag pill -->
-        <button
-          class="flex items-center gap-1.5 cursor-pointer hover:bg-base-200 rounded-full px-2.5 py-1 bg-base-100 border border-base-400 text-left"
-          onclick={openTagDialog}
-          onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') openTagDialog(); }}
-          aria-label="Edit tag"
-        >
-          <IconTag class="w-3 h-3 text-base-content/50" />
-          {#if currentAccount.tag}
-            <span class="text-xs text-base-content/70">{currentAccount.tag}</span>
-          {:else}
-            <span class="text-xs text-base-content/40 italic">Add a tag</span>
-          {/if}
-        </button>
-      </div>
-    </div>
-  {/if}
-
 <!-- Action row: Copy Email, QR, New Address, Refresh, Notifications -->
-<div class="flex items-center gap-2 px-2 pt-1 pb-1">
-  <!-- Copy Email wide button -->
+<div class="flex items-center gap-1.5 px-1 pt-2 pb-2">
+  <!-- Copy Email -->
   <button
-    class="btn btn-primary btn-sm flex-1 gap-2 font-semibold rounded-xl"
+    class="zinc-btn-copy flex-1 flex items-center justify-center gap-1.5 px-2 py-1 rounded-xl font-bold text-[11px] tracking-wide transition-colors shadow-sm"
     aria-label="Copy email address"
     onclick={onCopyEmail}
   >
-    <IconCopy class="w-4 h-4" />
-    Copy Email
+    <span class="zinc-btn-icon flex items-center justify-center w-5 h-5 rounded-full shrink-0">
+      <IconCopy class="w-3.5 h-3.5" />
+    </span>
+    <span class="leading-tight self-center">Copy</span>
   </button>
 
-  <!-- QR button -->
+  <!-- QR Code -->
   <button
-    class="btn btn-sm btn-square rounded-xl bg-primary/10 hover:bg-primary/20 border-0 tooltip tooltip-bottom"
-    data-tip="QR Code"
+    class="zinc-btn-qr flex-1 flex items-center justify-center gap-1.5 px-2 py-1 rounded-xl font-bold text-[11px] tracking-wide transition-colors shadow-sm"
     aria-label="Show QR code"
     onclick={onOpenQrDialog}
   >
-    <IconQr class="w-5 h-5 text-primary" />
+    <span class="zinc-btn-icon flex items-center justify-center w-5 h-5 rounded-full shrink-0">
+      <IconQr class="w-3.5 h-3.5" />
+    </span>
+    <span class="leading-tight self-center">QR</span>
   </button>
 
-  <!-- Archive/Unarchive button -->
+  <!-- Forget Me -->
+  <button
+    class="zinc-btn-forget flex-1 flex items-center justify-center gap-1.5 px-2 py-1 rounded-xl font-bold text-[11px] tracking-wide transition-colors shadow-sm"
+    aria-label="Delete email address"
+    onclick={() => onRemoveAccount(currentAccount.address)}
+  >
+    <span class="zinc-btn-icon flex items-center justify-center w-5 h-5 rounded-full shrink-0">
+      <IconTrash class="w-3.5 h-3.5" />
+    </span>
+    <span class="leading-tight self-center">Delete</span>
+  </button>
+
+  <!-- Archive/Unarchive -->
   {#if currentAccount}
     {#if currentAccount.archived}
       <button
-        class="btn btn-sm btn-square rounded-xl bg-success/10 hover:bg-success/20 border-0 tooltip tooltip-bottom text-success"
-        data-tip="Unarchive"
+        class="zinc-btn-archive flex-1 flex items-center justify-center gap-1.5 px-2 py-1 rounded-xl font-bold text-[11px] tracking-wide transition-colors shadow-sm"
         aria-label="Unarchive email"
         onclick={() => onUnarchiveAccount(currentAccount)}
       >
-        <IconArchive class="w-5 h-5" />
+        <span class="zinc-btn-icon-inv flex items-center justify-center w-5 h-5 rounded-full shrink-0">
+          <IconArchive class="w-3.5 h-3.5" />
+        </span>
+        <span class="leading-tight self-center">Unarchive</span>
       </button>
     {:else}
       <button
-        class="btn btn-sm btn-square rounded-xl bg-warning/10 hover:bg-warning/20 border-0 tooltip tooltip-bottom text-warning"
-        data-tip="Archive"
+        class="zinc-btn-archive flex-1 flex items-center justify-center gap-1.5 px-2 py-1 rounded-xl font-bold text-[11px] tracking-wide transition-colors shadow-sm"
         aria-label="Archive email"
         onclick={() => onArchiveAccount(currentAccount)}
       >
-        <IconArchive class="w-5 h-5" />
+        <span class="zinc-btn-icon-inv flex items-center justify-center w-5 h-5 rounded-full shrink-0">
+          <IconArchive class="w-3.5 h-3.5" />
+        </span>
+        <span class="leading-tight self-center">Archive</span>
       </button>
     {/if}
 
-    <!-- Delete button -->
-    <button
-      class="btn btn-sm btn-square rounded-xl bg-error/10 hover:bg-error/20 border-0 tooltip tooltip-bottom text-error"
-      data-tip="Delete"
-      aria-label="Delete email"
-      onclick={() => onRemoveAccount(currentAccount.address)}
-    >
-      <IconTrash class="w-5 h-5" />
-    </button>
 
-    <!-- Auto-renewal button (only for Guerrilla Mail) -->
-    {#if currentAccount.provider === 'guerrilla'}
-      <button
-        class="btn btn-sm btn-square rounded-xl {currentAccount.autoExtend ? 'bg-primary/10 hover:bg-primary/20 text-primary' : 'bg-base-200 hover:bg-base-300 text-base-content/60'} border-0 tooltip tooltip-left"
-        data-tip={currentAccount.autoExtend ? 'Auto-renewal enabled' : 'Enable auto-renewal'}
-        aria-label="Toggle auto-renewal"
-        onclick={() => onExtendAccount(currentAccount)}
-      >
-        <IconAutoRenew class="w-5 h-5" />
-      </button>
-    {/if}
+
   {/if}
 
   <!-- Domain context menu -->
@@ -322,26 +411,35 @@ let existingTags = $derived.by(() => {
       <div class="px-3 py-1.5">
         <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wider">Guerrilla Mail</p>
       </div>
-      <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2" onclick={() => { onCreateInbox('guerrilla'); domainMenuOpen = false; }}>
-        <IconEnvelope class="w-4 h-4 text-orange-500" />
-        Guerrilla Mail
-      </button>
-      <div class="border-t border-base-200 my-1"></div>
-      <div class="px-3 py-1.5">
-        <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wider">Burner.kiwi Instances</p>
-      </div>
-      <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2" onclick={() => { onCreateInbox('burner', 'alphac'); domainMenuOpen = false; }}>
-        <IconFlame class="w-4 h-4 text-blue-500" />
-        Alphac Mail
-      </button>
-      <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2" onclick={() => { onCreateInbox('burner', 'raceco'); domainMenuOpen = false; }}>
-        <IconFlame class="w-4 h-4 text-blue-500" />
-        Raceco Mail
-      </button>
-      <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2" onclick={() => { onCreateInbox('burner', 'burnerkiwi'); domainMenuOpen = false; }}>
-        <IconFlame class="w-4 h-4 text-blue-500" />
-        Burner.Kiwi
-      </button>
+      {#each Object.values(allProviders) as provider}
+        {#if !provider.multiInstance?.enabled}
+          <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2" onclick={() => { onCreateInbox(provider.id); domainMenuOpen = false; }}>
+            {#if provider.ui?.icon === 'envelope'}
+              <IconEnvelope class="w-4 h-4 text-orange-500" />
+            {:else if provider.ui?.icon === 'flame'}
+              <IconFlame class="w-4 h-4 text-blue-500" />
+            {:else}
+              <IconMail class="w-4 h-4 text-primary" />
+            {/if}
+            {provider.displayName}
+          </button>
+        {:else}
+          <div class="border-t border-base-200 my-1"></div>
+          <div class="px-3 py-1.5">
+            <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wider">{provider.displayName} Instances</p>
+          </div>
+          {#each provider.multiInstance?.instances || [] as instance}
+            <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2" onclick={() => { onCreateInbox(provider.id, instance.id); domainMenuOpen = false; }}>
+              {#if provider.ui?.icon === 'flame'}
+                <IconFlame class="w-4 h-4 text-blue-500" />
+              {:else}
+                <IconMail class="w-4 h-4 text-primary" />
+              {/if}
+              {instance.displayName}
+            </button>
+          {/each}
+        {/if}
+      {/each}
       <div class="border-t border-base-200 my-1"></div>
       <button 
         class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2 text-base-content" 
@@ -362,12 +460,46 @@ let existingTags = $derived.by(() => {
           onNavigateToSettings();
         }}
       >
-        <IconPlus class="w-4 h-4" />
+        <IconPlus class="w-5 h-5" />
         Add Custom Instance...
       </button>
     </div>
   {/if}
 </div>
+
+<!-- Tag and expiry row -->
+{#if currentAccount}
+    <div class="px-3 pb-0.5 pt-1">
+      <div class="flex items-center gap-2">
+        <!-- Expiry pill -->
+        <ExpiryPill
+          expiryTime={expiryTimeMinutes}
+          autoRenew={currentAccount.autoExtend}
+          onToggleAutoRenew={() => onToggleAutoExtend(currentAccount)}
+        />
+
+        <!-- Tag pill -->
+        <button
+          class="flex items-center gap-1.5 cursor-pointer hover:bg-base-200 rounded-full px-2.5 py-1 bg-base-100 border border-base-400 text-left"
+          onclick={openTagDialog}
+          onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') openTagDialog(); }}
+          aria-label="Edit tag"
+        >
+          <IconTag class="w-3 h-3 text-base-content/50" />
+          {#if currentAccount.tag}
+            <span class="text-xs text-base-content/70">{currentAccount.tag}</span>
+          {:else}
+            <span class="text-xs text-base-content/40 italic">Add a tag</span>
+          {/if}
+        </button>
+      </div>
+    </div>
+  {/if}
+
+
+
+<!-- Divider before search/filter -->
+<hr class="border-0 h-px my-1" style="background-color: var(--color-base-300);" />
 
 <!-- Search + Filter row -->
 <FilterList
@@ -380,10 +512,10 @@ let existingTags = $derived.by(() => {
   savedSearchFilters={savedSearchFilters}
   onSearchChange={(value: string) => searchQuery = value}
   onSortChange={(value: string) => sortBy = value}
-  onOtpOnlyChange={onOtpOnlyChange}
-  onSenderDomainChange={onSenderDomainChange}
-  onDateFromChange={onDateFromChange}
-  onDateToChange={onDateToChange}
+  onOtpOnlyChange={(value: boolean) => otpOnly = value}
+  onSenderDomainChange={(value: string) => senderDomain = value}
+  onDateFromChange={(value: string) => dateFrom = value}
+  onDateToChange={(value: string) => dateTo = value}
   onClearFilters={onClearFilters}
   onSaveFilter={onSaveFilter}
   onLoadFilter={onLoadFilter}
@@ -410,7 +542,7 @@ let existingTags = $derived.by(() => {
 
 {#if formDetected}
 <!-- Form Detected Container -->
-<div class="px-3 py-2 border-t border-base-200 bg-success/10">
+<div class="px-5 py-2 border-t border-base-200 bg-success/10">
   <div class="flex items-center justify-between">
     <span class="text-xs font-medium text-success">Form Detected:</span>
     <button class="btn btn-xs btn-success text-white" onclick={onAutofillForm}>
@@ -421,19 +553,167 @@ let existingTags = $derived.by(() => {
 {/if}
 
 {#if latestOtp !== '------'}
-<!-- OTP Container -->
-<div class="px-3 py-2 border-t border-base-200 bg-info/10">
-  <div class="flex items-center justify-between">
-    <span class="text-xs font-medium text-info">Latest OTP:</span>
-    <div class="flex items-center gap-2">
-      <span class="text-sm font-bold text-info font-mono">{latestOtp}</span>
-      <button class="btn btn-ghost btn-xs btn-square" aria-label="Copy OTP" onclick={onCopyOtp}>
-        <IconCopy class="w-4 h-4 text-info" />
+<!-- OTP Container - fixed at bottom -->
+<div class="border-t border-base-200 absolute bottom-0 left-0 right-0 z-10">
+  {#if !otpCollapsed}
+  {#if otpDropupOpen}
+  <div class="border-b border-base-200" style="background: color-mix(in srgb, var(--color-primary) 5%), white);">
+
+    <!-- Section: Current email address -->
+    <div class="px-5 pt-2.5 pb-1 flex items-center justify-between">
+      <span class="text-xs font-bold tracking-widest uppercase text-primary">Current Email Address</span>
+      <IconChevronDown class="w-3.5 h-3.5 text-base-content/40" />
+    </div>
+    <div class="overflow-y-auto" style="max-height: 180px; scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent;">
+      {#if otpHistoryCurrent.length === 0}
+        <p class="text-xs text-base-content/40 px-5 pb-2">No OTPs for this inbox</p>
+      {:else}
+        {#each otpHistoryCurrent as item}
+          <div class="flex items-center gap-3 px-5 py-2 bg-white rounded-xl mx-2 mb-2 shadow-sm">
+            <div class="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0" style="background: color-mix(in srgb, var(--color-primary) 12%), white);">
+              {#if item.from}
+                <img
+                  src={getDomainFaviconUrl(item.from)}
+                  alt=""
+                  class="w-6 h-6 object-contain"
+                  loading="lazy"
+                  onerror={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    const fb = getRootDomainFaviconUrl(item.from);
+                    if (img.src !== fb) { img.src = fb; } else { img.style.display = 'none'; }
+                  }}
+                />
+              {/if}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm font-semibold text-base-content truncate">{item.from_name || item.from}</span>
+                <span class="text-xs text-base-content/40">·</span>
+                <span class="text-xs text-base-content/40 flex-shrink-0">{timeAgo(item.received_at)}</span>
+              </div>
+              <span class="font-bold text-primary" style="font-size: 15px; letter-spacing: 0.08em;">{item.otp}</span>
+            </div>
+            <button
+              class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+              style="background: color-mix(in srgb, var(--color-primary) 12%), white);"
+              aria-label="Copy"
+              onclick={() => navigator.clipboard.writeText(item.otp)}
+            >
+              <IconCopy class="w-3.5 h-3.5 text-primary" />
+            </button>
+          </div>
+        {/each}
+      {/if}
+    </div>
+
+    <!-- Section: Other email addresses -->
+    {#if otpHistoryOther.length > 0}
+    <div class="px-5 pt-1 pb-1 flex items-center justify-between border-t border-base-200">
+      <span class="text-xs font-bold tracking-widest uppercase text-primary">Other Email Addresses</span>
+      <IconChevronDown class="w-3.5 h-3.5 text-base-content/40" />
+    </div>
+    <div class="overflow-y-auto" style="max-height: 180px; scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent;">
+      {#each otpHistoryOther as item}
+        <div class="flex items-center gap-3 px-5 py-2 bg-white rounded-xl mx-2 mb-2 shadow-sm">
+          <div class="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0" style="background: color-mix(in srgb, var(--color-primary) 12%), white);">
+            {#if item.from}
+              <img
+                src={getDomainFaviconUrl(item.from)}
+                alt=""
+                class="w-6 h-6 object-contain"
+                loading="lazy"
+                onerror={(e) => {
+                  const img = e.target as HTMLImageElement;
+                  const fb = getRootDomainFaviconUrl(item.from);
+                  if (img.src !== fb) { img.src = fb; } else { img.style.display = 'none'; }
+                }}
+              />
+            {/if}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span class="text-sm font-semibold text-base-content truncate">{item.from_name || item.from}</span>
+              <span class="text-xs text-base-content/40">·</span>
+              <span class="text-xs text-base-content/40 flex-shrink-0">{timeAgo(item.received_at)}</span>
+            </div>
+            <span class="font-bold text-primary" style="font-size: 15px; letter-spacing: 0.08em;">{item.otp}</span>
+          </div>
+          <button
+            class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+            style="background: color-mix(in srgb, var(--color-primary) 12%), white);"
+            aria-label="Copy"
+            onclick={() => navigator.clipboard.writeText(item.otp)}
+          >
+            <IconCopy class="w-3.5 h-3.5 text-primary" />
+          </button>
+        </div>
+      {/each}
+    </div>
+    {/if}
+
+  </div>
+  {/if}
+
+  <div class="flex items-center gap-3 px-5 py-2.5" style="background: color-mix(in srgb, var(--color-primary) 10%), white);">
+
+    <!-- Circular favicon -->
+    <div class="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center flex-shrink-0 overflow-hidden">
+      {#if otpSenderEmail}
+        <img
+          src={getDomainFaviconUrl(otpSenderEmail)}
+          alt=""
+          class="w-6 h-6 object-contain"
+          loading="lazy"
+          onerror={(e) => {
+            const img = e.target as HTMLImageElement;
+            const fallback = getRootDomainFaviconUrl(otpSenderEmail);
+            if (img.src !== fallback) { img.src = fallback; } else { img.style.display = 'none'; }
+          }}
+        />
+      {/if}
+    </div>
+
+    <!-- Sender name + time -->
+    <div class="flex flex-col min-w-0 flex-shrink-0" style="width: 72px;">
+      <span class="text-sm font-semibold text-base-content truncate leading-tight">{latestOtpSenderName || otpSenderEmail || 'OTP'}</span>
+      <span class="text-xs text-base-content/50 leading-tight mt-0.5">{otpContext.split(' | ').at(-1) || ''}</span>
+    </div>
+
+    <!-- OTP pill + copy (single solid button) -->
+    <div class="flex-1 flex items-center justify-center gap-2">
+      <button
+        class="flex items-center gap-2 rounded-full px-4 py-2 bg-primary hover:opacity-90 transition-opacity"
+        aria-label="Copy OTP"
+        onclick={onCopyOtp}
+      >
+        <span class="font-bold text-white" style="font-size: 15px; letter-spacing: 0.08em;">{latestOtp.replace(/\s/g, '')}</span>
+        <IconCopy class="w-4 h-4 text-white/80 flex-shrink-0" />
       </button>
     </div>
+
+    <!-- Vertical divider -->
+    <div class="w-px h-6 flex-shrink-0 bg-base-content/15"></div>
+
+    <!-- Collapse button (plain icon) -->
+    <button
+      class="w-8 h-8 flex items-center justify-center flex-shrink-0 transition-opacity hover:opacity-80"
+      aria-label="Toggle OTP history"
+      onclick={toggleOtpDropup}
+    >
+      <IconChevronDown class="w-4 h-4 text-base-content/50 {otpDropupOpen ? 'rotate-180' : ''}" />
+    </button>
+
   </div>
-  {#if otpContext}
-    <div class="text-xs text-info/70 mt-1">{otpContext}</div>
+  {:else}
+  <button
+    class="w-full flex items-center justify-between px-5 py-1.5 text-xs font-medium text-primary/70 hover:text-primary transition-colors"
+    style="background: color-mix(in srgb, var(--color-primary) 5%, white);"
+    onclick={() => { otpCollapsed = false; }}
+    aria-label="Show OTP bar"
+  >
+    <span>OTP ready · {latestOtp}</span>
+    <IconChevronDown class="w-3.5 h-3.5" />
+  </button>
   {/if}
 </div>
 {/if}
@@ -442,7 +722,10 @@ let existingTags = $derived.by(() => {
 <TagDialog
   open={tagDialogOpen}
   currentTag={tagTargetAccount?.tag || null}
+  currentTagColor={tagTargetAccount?.tagColor || null}
   existingTags={existingTags}
+  tagColors={tagColors}
   onClose={closeTagDialog}
   onSave={saveTag}
 />
+</div>

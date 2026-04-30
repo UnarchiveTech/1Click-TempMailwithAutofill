@@ -37,7 +37,8 @@ export default defineConfig({
       },
     },
     content_security_policy: {
-      extension_pages: "script-src 'self'; object-src 'none'; base-uri 'self';",
+      extension_pages:
+        "script-src 'self'; object-src 'none'; base-uri 'self'; img-src 'self' https: data:;",
     },
     permissions: ['storage', 'alarms', 'notifications', 'clipboardWrite', 'scripting', 'cookies'],
     host_permissions: ['<all_urls>'],

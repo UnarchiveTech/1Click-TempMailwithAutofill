@@ -22,7 +22,7 @@ interface LogEntry {
 
 type LogContext = Record<string, unknown>;
 
-let isLoggingEnabled = false;
+let isLoggingEnabled = true;
 let currentLogLevel: LogLevel = LogLevel.INFO;
 
 /**

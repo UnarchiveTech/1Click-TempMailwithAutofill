@@ -3,23 +3,27 @@
  */
 
 import { browser } from 'wxt/browser';
-import { BURNER_MAIL_EXPIRY_MS, GUERRILLA_MAIL_EXPIRY_MS } from '@/utils/constants.js';
+import { fetchEmails } from '@/services/dsl/email-fetcher.js';
+import { DEFAULT_PROVIDER, EmailService, loadProviderConfig } from '@/services/email-service.js';
+import { addActivityEvent } from '@/utils/activity-tracker.js';
 import {
   ApiError,
-  InboxAlreadyExistsError,
   InboxCreationError,
   InboxNotFoundError,
   InboxSessionConflictError,
   ProviderUnsupportedError,
 } from '@/utils/errors.js';
-import { logError } from '@/utils/logger.js';
-import type { Account, Email, EmailFilters, MailProvider, BurnerInstance } from '@/utils/types.js';
-import { fetchBurnerEmails } from '../providers/burner-api.js';
-import { guerrillaApiCall } from '../providers/guerrilla-api.js';
-import { fetchGuerrillaEmails } from '../providers/guerrilla-email-fetcher.js'; // eslint-disable-line
-import { getBurnerInstances, getSelectedBurnerInstance } from '../providers/provider-registry.js';
+import { getProviderInstances } from '@/utils/instance-manager.js';
+import { log, logError } from '@/utils/logger.js';
+import type {
+  Account,
+  Email,
+  EmailFilters,
+  MailProvider,
+  ProviderInstance,
+} from '@/utils/types.js';
 import { incrementAnalytic } from './analytics.js';
-import { archiveInboxEmails, clearStoredEmails } from './email-storage.js';
+import { archiveInboxEmails, clearStoredEmails, getStoredEmails } from './email-storage.js';
 
 export interface DeleteInboxResult {
   success: boolean;
@@ -36,15 +40,23 @@ export interface DeleteInboxResult {
  * @throws ProviderUnsupportedError if the provider is not supported
  * @throws ApiError for other API-related errors
  */
-export async function createInbox(provider?: MailProvider, instanceId?: string, _emailUser?: string): Promise<Account> {
-  const { selectedProvider = 'burner' } = (await browser.storage.local.get([
+export async function createInbox(
+  provider?: MailProvider,
+  instanceId?: string,
+  _emailUser?: string
+): Promise<Account> {
+  const { selectedProvider = DEFAULT_PROVIDER } = (await browser.storage.local.get([
     'selectedProvider',
   ])) as { selectedProvider?: string };
-  
-  // If instanceId is provided, force burner provider
+
+  if (!selectedProvider) {
+    throw new ProviderUnsupportedError('No provider selected');
+  }
+
+  // If instanceId is provided, use that provider
   let activeProvider: MailProvider;
   if (instanceId) {
-    activeProvider = 'burner';
+    activeProvider = (provider || selectedProvider) as MailProvider;
   } else {
     activeProvider = (provider || selectedProvider) as MailProvider;
   }
@@ -52,91 +64,70 @@ export async function createInbox(provider?: MailProvider, instanceId?: string, 
   try {
     let inbox: Account;
 
-    if (activeProvider === 'guerrilla') {
-      const data = await guerrillaApiCall('get_email_address');
+    const config = loadProviderConfig(activeProvider);
+    let instanceUrl: string | undefined;
+    let selectedInstance: ProviderInstance | null = null;
 
-      if (!data.email_addr) {
-        throw new InboxCreationError(
-          'guerrilla',
-          { response: data },
-          new Error('Missing email_addr in Guerrilla Mail API response')
-        );
-      }
-
-      const { email_addr: address, sid_token: sidToken } = data;
-      inbox = {
-        id: address,
-        address,
-        sidToken,
-        provider: 'guerrilla',
-        createdAt: Date.now(),
-        expiresAt: Date.now() + GUERRILLA_MAIL_EXPIRY_MS,
-        expiryNotified: false,
-        autoExtend: false,
-      };
-    } else if (activeProvider === 'burner') {
-      let selectedInstance: BurnerInstance | null;
+    // Handle multi-instance providers
+    if (config.multiInstance?.enabled) {
       if (instanceId) {
-        // Use the specific instance provided
-        const instances = await getBurnerInstances();
+        const instances = await getProviderInstances(activeProvider);
         selectedInstance = instances.find((i) => i.id === instanceId) || null;
       } else {
-        // Use the globally selected instance
-        selectedInstance = await getSelectedBurnerInstance();
+        // Random instance selection for multi-instance providers
+        const instances = await getProviderInstances(activeProvider);
+        if (instances.length === 0) {
+          throw new InboxCreationError(activeProvider, {
+            reason: `No instances available for ${activeProvider}. Please add instances in settings.`,
+          });
+        }
+        selectedInstance = instances[Math.floor(Math.random() * instances.length)];
       }
-      
+
       if (!selectedInstance) {
-        throw new InboxCreationError('burner', {
-          reason: 'No Burner.kiwi instance selected. Please select an instance in settings.',
+        throw new InboxCreationError(activeProvider, {
+          reason: `Instance not found for ${activeProvider}. Please select an instance in settings.`,
         });
       }
 
-      const response = await fetch(`${selectedInstance.apiUrl}/inbox`, {
-        method: 'GET',
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new InboxCreationError('burner', {
-          status: response.status,
-          instance: selectedInstance.displayName,
-          errorText,
-          reason: `HTTP ${response.status} when creating inbox on ${selectedInstance.displayName}`,
-        });
-      }
-
-      // biome-ignore lint/suspicious/noExplicitAny: Burner API response type
-      const data: any = await response.json();
-      if (!data.success) {
-        throw new InboxCreationError('burner', {
-          instance: selectedInstance.displayName,
-          error: data.errors?.msg,
-          response: data,
-          reason: `Burner API returned failure: ${data.errors?.msg || 'Unknown error'}`,
-        });
-      }
-
-      const { email, token } = data.result;
-      if (!email || !token) {
-        throw new InboxCreationError('burner', {
-          instance: selectedInstance.displayName,
-          reason: 'Missing email or token in Burner API response',
-          response: data,
-        });
-      }
-      inbox = {
-        id: email.id,
-        address: email.address,
-        token,
-        provider: 'burner',
-        createdAt: Date.now(),
-        expiresAt: Date.now() + BURNER_MAIL_EXPIRY_MS,
-        expiryNotified: false,
-        autoExtend: false,
-      };
-    } else {
-      throw new ProviderUnsupportedError(activeProvider);
+      instanceUrl = selectedInstance.apiUrl;
     }
+
+    const service = new EmailService(config, browser);
+    const result = await service.executeOperation('createInbox', {
+      instanceUrl,
+      forceNewSession: true,
+    });
+
+    log('Create inbox result:', JSON.stringify(result));
+
+    const { address, id, token } = result;
+    // For single-instance providers like guerrilla, id might not be in response
+    // Use address as id if id is not present
+    const inboxId = (id || address) as string;
+
+    // Allow empty token for Guerrilla Mail (API sometimes returns empty token)
+    if (!address) {
+      logError('Missing required fields in API response', { result, address, token });
+      throw new InboxCreationError(
+        activeProvider,
+        { response: result },
+        new Error('Missing required fields in API response')
+      );
+    }
+
+    inbox = {
+      id: inboxId,
+      address: address as string,
+      token: token as string,
+      sidToken: token as string,
+      provider: activeProvider,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + (config.expiry?.duration || 3600000),
+      expiryNotified: false,
+      autoExtend: false,
+      ...(instanceUrl && { instanceUrl }),
+    };
 
     const { inboxes = [], seenEmailIds = {} } = (await browser.storage.local.get([
       'inboxes',
@@ -146,7 +137,7 @@ export async function createInbox(provider?: MailProvider, instanceId?: string, 
     const existingInbox = inboxes.find((e) => e.address === inbox.address);
 
     if (existingInbox) {
-      if (activeProvider === 'guerrilla') {
+      if (config.expiry?.renewable) {
         const now = Date.now();
         const isExpired = existingInbox.expiresAt && now > existingInbox.expiresAt;
 
@@ -159,16 +150,25 @@ export async function createInbox(provider?: MailProvider, instanceId?: string, 
           }
           return inboxes[inboxIndex] || existingInbox;
         } else {
-          // Expired/archived: call forget_me and get fresh address
+          // Expired/archived: call forget_me if provider supports it and get fresh address
           try {
-            await guerrillaApiCall('forget_me', { email_addr: inbox.address });
-            const freshData = await guerrillaApiCall('get_email_address');
-            if (freshData.email_addr && freshData.email_addr !== inbox.address) {
-              inbox.address = freshData.email_addr;
-              inbox.id = freshData.email_addr;
-              inbox.sidToken = freshData.sid_token;
+            const config = loadProviderConfig(activeProvider);
+            if (config.operations?.forgetMe) {
+              await service.executeOperation('forgetMe', {
+                auth: { token: inbox.sidToken as string },
+                variables: { email_addr: inbox.address },
+              });
+            }
+            const freshData = await service.executeOperation('createInbox', {
+              forceNewSession: true,
+            });
+            if (freshData.address && freshData.address !== inbox.address) {
+              inbox.address = freshData.address as string;
+              inbox.id = freshData.address as string;
+              inbox.sidToken = freshData.token as string;
+              const timestamp = freshData.timestamp as number;
               inbox.expiresAt =
-                ((freshData.email_timestamp || 0) + GUERRILLA_MAIL_EXPIRY_MS / 1000) * 1000;
+                ((timestamp || 0) + (config.expiry?.duration || 3600000) / 1000) * 1000;
 
               const stillDuplicate = inboxes.find(
                 (i: Account) => i.address === inbox.address && !i.archived
@@ -180,23 +180,22 @@ export async function createInbox(provider?: MailProvider, instanceId?: string, 
               await browser.storage.local.set({ inboxes: cleaned });
               inboxes.length = 0;
               inboxes.push(...cleaned);
-            } else {
-              throw new ApiError('Failed to get fresh email address from Guerrilla Mail', {
-                expectedDifferent: true,
-                received: freshData.email_addr,
-                original: inbox.address,
-              });
+              inboxes.push(inbox);
+              await browser.storage.local.set({ inboxes });
+              log('Created fresh inbox after forgetting expired one');
+              return inbox;
             }
-          } catch (forgetError: unknown) {
-            const msg = forgetError instanceof Error ? forgetError.message : String(forgetError);
-            throw new InboxSessionConflictError(
-              { originalError: msg },
-              forgetError instanceof Error ? forgetError : undefined
-            );
+          } catch (error: unknown) {
+            logError('Error during forget_me and fresh inbox creation:', error);
+            throw new InboxCreationError(activeProvider, {
+              reason: 'Failed to create fresh inbox',
+            });
+            // Continue with new inbox even if forget_me fails
           }
         }
-      } else if (activeProvider === 'burner') {
-        throw new InboxAlreadyExistsError(inbox.address);
+      } else {
+        // Provider doesn't support renewal - throw error if inbox already exists
+        throw new InboxSessionConflictError({ address: inbox.address });
       }
     }
 
@@ -205,6 +204,11 @@ export async function createInbox(provider?: MailProvider, instanceId?: string, 
 
     await incrementAnalytic('accountsCreated');
     await browser.storage.local.set({ inboxes, seenEmailIds });
+
+    // Track account creation activity
+    await addActivityEvent('account_created', {
+      inboxAddress: inbox.address,
+    });
 
     return inbox;
   } catch (error: unknown) {
@@ -240,14 +244,21 @@ export async function deleteInbox(
       return { success: false, error: `Inbox with ID ${inboxId} not found` };
     }
 
-    if (inbox.provider === 'guerrilla') {
+    const config = loadProviderConfig(inbox.provider);
+
+    // Call forget_me if provider supports it
+    if (config.operations?.forgetMe) {
       try {
-        await guerrillaApiCall('forget_me', { email_addr: inbox.address });
-        await guerrillaApiCall('get_email_address');
+        const service = new EmailService(config, browser);
+        await service.executeOperation('forgetMe', {
+          auth: { token: inbox.sidToken as string },
+          variables: { email_addr: inbox.address },
+        });
+        await service.executeOperation('createInbox', { forceNewSession: true });
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         logError(
-          'Error during Guerrilla Mail forget_me:',
+          'Error during forget_me:',
           { inboxId: inbox.id, inboxAddress: inbox.address, error: errorMessage },
           error instanceof Error ? error : new Error(errorMessage)
         );
@@ -314,13 +325,62 @@ export async function checkNewEmails(
       });
     }
 
-    if (inbox.provider === 'guerrilla') {
-      return fetchGuerrillaEmails(inbox, filters);
-    } else if (inbox.provider === 'burner') {
-      return fetchBurnerEmails(inbox, filters);
-    } else {
-      throw new ProviderUnsupportedError(inbox.provider);
+    // If inbox is archived, load emails from archivedEmails storage
+    if (inbox.archived) {
+      const { archivedEmails = {} } = (await browser.storage.local.get(['archivedEmails'])) as {
+        archivedEmails?: Record<string, Email[]>;
+      };
+      const archived = archivedEmails[inbox.address] || [];
+
+      // Apply filters to archived emails
+      let filtered = archived;
+      if (filters.searchQuery) {
+        const query = filters.searchQuery.toLowerCase();
+        filtered = filtered.filter(
+          (e) =>
+            e.subject?.toLowerCase().includes(query) ||
+            e.from_name?.toLowerCase().includes(query) ||
+            e.from?.toLowerCase().includes(query)
+        );
+      }
+      if (filters.hasOTP) {
+        filtered = filtered.filter((e) => e.otp && e.otp !== '------');
+      }
+
+      return filtered;
     }
+
+    // If inbox is not archived, fetch from provider API and merge with stored emails
+    let apiMessages: Email[] = [];
+    const config = loadProviderConfig(inbox.provider);
+    const service = new EmailService(config, browser);
+    apiMessages = await fetchEmails(
+      config,
+      inbox,
+      (operationName, context) => service.executeOperation(operationName, context),
+      filters
+    );
+
+    // Merge with stored emails to ensure we have all emails including those stored by periodic checks
+    const storedEmails = await getStoredEmails(inbox.address);
+    const mergedMessages = new Map<string, Email>();
+
+    // Add stored emails first
+    for (const email of storedEmails) {
+      mergedMessages.set(email.id, email);
+    }
+
+    // Add API emails, overwriting stored ones if same ID
+    for (const email of apiMessages) {
+      mergedMessages.set(email.id, email);
+    }
+
+    // Convert back to array and sort by received_at descending
+    const allMessages = Array.from(mergedMessages.values()).sort(
+      (a, b) => b.received_at - a.received_at
+    );
+
+    return allMessages;
   } catch (error: unknown) {
     if (error instanceof InboxNotFoundError || error instanceof ApiError) {
       throw error;

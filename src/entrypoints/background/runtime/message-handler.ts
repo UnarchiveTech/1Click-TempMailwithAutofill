@@ -2,9 +2,16 @@
  * Runtime message handler — routes incoming messages to the appropriate module functions
  */
 
-import { browser } from 'wxt/browser';
+import { DEFAULT_PROVIDER, EmailService, loadProviderConfig } from '@/services/email-service.js';
+import {
+  addCustomProviderInstance,
+  getProviderInstances,
+  getSelectedProviderInstance,
+  initializeDefaultProvider,
+  removeCustomProviderInstance,
+} from '@/utils/instance-manager.js';
 import { logError, logInfo } from '@/utils/logger.js';
-import type { Account } from '@/utils/types.js';
+import type { Account, ProviderInstance } from '@/utils/types.js';
 import { handleUpdateSessionCredentials } from '../credentials/session-credentials.js';
 import { getAnalytics } from '../inbox/analytics.js';
 import { archiveInboxEmails, getArchivedEmails } from '../inbox/email-storage.js';
@@ -15,14 +22,6 @@ import {
   setupInboxExpiryCheck,
   setupPeriodicEmailCheck,
 } from '../inbox/inbox-manager.js';
-import { autoRenewGuerrillaInbox, guerrillaApiCall } from '../providers/guerrilla-api.js';
-import {
-  addCustomBurnerInstance,
-  getBurnerInstances,
-  getSelectedBurnerInstance,
-  initializeDefaultProvider,
-  removeCustomBurnerInstance,
-} from '../providers/provider-registry.js';
 
 export function registerMessageHandler(): void {
   browser.runtime.onMessage.addListener(
@@ -33,19 +32,11 @@ export function registerMessageHandler(): void {
       if (message.type === 'createInbox') {
         (async () => {
           try {
-            const { selectedProvider = 'burner' } = (await browser.storage.local.get([
+            const { selectedProvider } = (await browser.storage.local.get([
               'selectedProvider',
             ])) as { selectedProvider?: string };
-            let provider = message.provider || selectedProvider;
-            let instanceId = message.instanceId;
-
-            // Handle burner instance IDs (alphac, raceco, burnerkiwi)
-            // Don't change global settings, just pass as instanceId for this specific inbox creation
-            const burnerInstanceIds = ['alphac', 'raceco', 'burnerkiwi'];
-            if (burnerInstanceIds.includes(provider)) {
-              instanceId = provider;
-              provider = 'burner';
-            }
+            const provider = message.provider || selectedProvider;
+            const instanceId = message.instanceId;
 
             const inbox = await createInbox(provider, instanceId, message.user);
             sendResponse({ success: true, inbox });
@@ -123,6 +114,9 @@ export function registerMessageHandler(): void {
               return;
             }
             inboxes[inboxIndex].tag = message.tag;
+            if (message.color) {
+              inboxes[inboxIndex].tagColor = message.color;
+            }
             await browser.storage.local.set({ inboxes });
             sendResponse({ success: true });
           } catch (error: unknown) {
@@ -185,7 +179,7 @@ export function registerMessageHandler(): void {
       if (message.type === 'getProvider') {
         (async () => {
           try {
-            const { selectedProvider = 'burner' } = (await browser.storage.local.get([
+            const { selectedProvider } = (await browser.storage.local.get([
               'selectedProvider',
             ])) as { selectedProvider?: string };
             sendResponse({ success: true, provider: selectedProvider });
@@ -276,10 +270,11 @@ export function registerMessageHandler(): void {
         return true;
       }
 
-      if (message.action === 'getBurnerInstances') {
+      if (message.action === 'getProviderInstances') {
         (async () => {
           try {
-            const instances = await getBurnerInstances();
+            const provider = message.provider || DEFAULT_PROVIDER;
+            const instances = await getProviderInstances(provider);
             sendResponse({ success: true, instances });
           } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -289,7 +284,7 @@ export function registerMessageHandler(): void {
         return true;
       }
 
-      if (message.type === 'renewGuerrillaInbox') {
+      if (message.type === 'renewInbox') {
         (async () => {
           try {
             const { inboxes = [] } = (await browser.storage.local.get(['inboxes'])) as {
@@ -300,14 +295,138 @@ export function registerMessageHandler(): void {
               sendResponse({ success: false, error: 'Inbox not found' });
               return;
             }
-            if (inbox.provider !== 'guerrilla') {
+            const providerConfig = loadProviderConfig(inbox.provider);
+            if (!providerConfig.expiry?.renewable) {
               sendResponse({
                 success: false,
-                error: 'Only Guerrilla Mail addresses can be renewed',
+                error: 'This provider does not support inbox renewal',
               });
               return;
             }
-            await autoRenewGuerrillaInbox(inbox);
+            // Auto-renew inbox using provider config
+            const config = loadProviderConfig(inbox.provider);
+            const service = new EmailService(config, browser);
+
+            if (!inbox.sidToken) {
+              sendResponse({ success: false, error: 'No sidToken available for renewal' });
+              return;
+            }
+
+            const currentUser = inbox.address.split('@')[0];
+            const newEmailResponse = await service.executeOperation('createInbox', {
+              forceNewSession: true,
+            });
+
+            if (!newEmailResponse.token) {
+              sendResponse({ success: false, error: 'Failed to get fresh token for renewal' });
+              return;
+            }
+
+            const newSidToken = newEmailResponse.token as string;
+
+            // Call renewal operation from config
+            if (providerConfig.expiry?.renewalMethod) {
+              await service.executeOperation(providerConfig.expiry.renewalMethod, {
+                auth: { token: newSidToken },
+                variables: { emailUser: currentUser },
+              });
+            }
+
+            const { inboxes: allInboxes = [] } = (await browser.storage.local.get(['inboxes'])) as {
+              inboxes?: Account[];
+            };
+            const inboxIndex = allInboxes.findIndex((i: Account) => i.id === inbox.id);
+
+            if (inboxIndex !== -1) {
+              const timestamp = newEmailResponse.timestamp as number;
+              const expiryConfig = loadProviderConfig(inbox.provider);
+              const updatedInbox = {
+                ...allInboxes[inboxIndex],
+                sidToken: newSidToken,
+                expiresAt:
+                  ((timestamp || 0) + (expiryConfig.expiry?.duration || 3600000) / 1000) * 1000,
+                expiryNotified: false,
+              };
+
+              allInboxes[inboxIndex] = updatedInbox;
+              await browser.storage.local.set({ inboxes: allInboxes });
+            }
+
+            sendResponse({ success: true });
+          } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            sendResponse({ success: false, error: msg });
+          }
+        })();
+        return true;
+      }
+
+      if (message.action === 'getProviderInstances') {
+        (async () => {
+          try {
+            const provider = message.provider || DEFAULT_PROVIDER;
+            const instances = await getProviderInstances(provider);
+            sendResponse({ success: true, instances });
+          } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            sendResponse({ success: false, error: msg });
+          }
+        })();
+        return true;
+      }
+
+      if (message.action === 'addCustomInstance') {
+        (async () => {
+          try {
+            const { selectedProvider } = await browser.storage.local.get(['selectedProvider']);
+            const provider = (selectedProvider as string) || DEFAULT_PROVIDER;
+            await addCustomProviderInstance(
+              provider,
+              message.instance as Omit<ProviderInstance, 'id' | 'isCustom'>
+            );
+            sendResponse({ success: true });
+          } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            sendResponse({ success: false, error: msg });
+          }
+        })();
+        return true;
+      }
+
+      if (message.action === 'removeCustomInstance') {
+        (async () => {
+          try {
+            const { selectedProvider } = await browser.storage.local.get(['selectedProvider']);
+            const provider = (selectedProvider as string) || DEFAULT_PROVIDER;
+            await removeCustomProviderInstance(provider, message.instanceId as string);
+            sendResponse({ success: true });
+          } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            sendResponse({ success: false, error: msg });
+          }
+        })();
+        return true;
+      }
+
+      if (message.action === 'getSelectedInstance') {
+        (async () => {
+          try {
+            const { selectedProvider } = await browser.storage.local.get(['selectedProvider']);
+            const provider = (selectedProvider as string) || DEFAULT_PROVIDER;
+            const instance = await getSelectedProviderInstance(provider);
+            sendResponse({ success: true, instance });
+          } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            sendResponse({ success: false, error: msg });
+          }
+        })();
+        return true;
+      }
+
+      if (message.action === 'setSelectedInstance' || message.action === 'setInstance') {
+        (async () => {
+          try {
+            await browser.storage.local.set({ selectedInstance: message.instanceId });
             sendResponse({ success: true });
           } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -320,7 +439,12 @@ export function registerMessageHandler(): void {
       if (message.action === 'addCustomBurnerInstance') {
         (async () => {
           try {
-            await addCustomBurnerInstance(message.instance);
+            const { selectedProvider } = await browser.storage.local.get(['selectedProvider']);
+            const provider = (selectedProvider as string) || DEFAULT_PROVIDER;
+            await addCustomProviderInstance(
+              provider,
+              message.instance as Omit<ProviderInstance, 'id' | 'isCustom'>
+            );
             sendResponse({ success: true });
           } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -330,10 +454,12 @@ export function registerMessageHandler(): void {
         return true;
       }
 
-      if (message.action === 'removeCustomBurnerInstance') {
+      if (message.action === 'removeCustomProviderInstance') {
         (async () => {
           try {
-            await removeCustomBurnerInstance(message.instanceId);
+            const { selectedProvider } = await browser.storage.local.get(['selectedProvider']);
+            const provider = (selectedProvider as string) || DEFAULT_PROVIDER;
+            await removeCustomProviderInstance(provider, message.instanceId as string);
             sendResponse({ success: true });
           } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -343,10 +469,12 @@ export function registerMessageHandler(): void {
         return true;
       }
 
-      if (message.action === 'getSelectedBurnerInstance') {
+      if (message.action === 'getSelectedProviderInstance') {
         (async () => {
           try {
-            const instance = await getSelectedBurnerInstance();
+            const { selectedProvider } = await browser.storage.local.get(['selectedProvider']);
+            const provider = (selectedProvider as string) || DEFAULT_PROVIDER;
+            const instance = await getSelectedProviderInstance(provider);
             sendResponse({ success: true, instance });
           } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -356,13 +484,13 @@ export function registerMessageHandler(): void {
         return true;
       }
 
-      if (
-        message.action === 'setSelectedBurnerInstance' ||
-        message.action === 'setBurnerInstance'
-      ) {
+      if (message.action === 'setSelectedProviderInstance') {
         (async () => {
           try {
-            await browser.storage.local.set({ selectedBurnerInstance: message.instanceId });
+            const { selectedProvider } = await browser.storage.local.get(['selectedProvider']);
+            const provider = (selectedProvider as string) || DEFAULT_PROVIDER;
+            const storageKey = `selectedInstance_${provider}`;
+            await browser.storage.local.set({ [storageKey]: message.instanceId });
             sendResponse({ success: true });
           } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -385,15 +513,15 @@ export function registerMessageHandler(): void {
         return true;
       }
 
-      if (message.action === 'guerrillaApiCall') {
+      if (message.action === 'providerApiCall') {
         (async () => {
           try {
-            const data = await guerrillaApiCall(
-              message.func,
-              message.params || {},
-              'GET',
-              message.sidToken
-            );
+            const config = loadProviderConfig(message.provider);
+            const service = new EmailService(config, browser);
+            const data = await service.executeOperation(message.func, {
+              auth: message.sidToken ? { token: message.sidToken } : undefined,
+              variables: message.params || {},
+            });
             sendResponse({ success: true, data });
           } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -413,7 +541,9 @@ export function registerMessageHandler(): void {
       try {
         const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
         if (tab.id) {
-          browser.tabs.sendMessage(tab.id, { type: 'autofillForm' });
+          await browser.tabs.sendMessage(tab.id, { type: 'autofillForm' }).catch(() => {
+            // Ignore if content script not loaded in the tab
+          });
         }
       } catch (error: unknown) {
         logError(

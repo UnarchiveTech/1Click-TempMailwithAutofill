@@ -1,22 +1,17 @@
-import { browser } from 'wxt/browser';
 import { TOAST_DEFAULT_DURATION_MS } from '@/utils/constants.js';
 
-const DEFAULT_ERROR_COLOR = '#EA4335';
-const DEFAULT_SUCCESS_COLOR = '#34A853';
+const DEFAULT_ERROR_COLOR = 'var(--color-error)';
+const DEFAULT_SUCCESS_COLOR = 'var(--color-success)';
 
-let cachedErrorColor: string | null = null;
-let cachedSuccessColor: string | null = null;
-
-async function getThemeColors(): Promise<{ error: string; success: string }> {
-  if (cachedErrorColor && cachedSuccessColor) {
-    return { error: cachedErrorColor, success: cachedSuccessColor };
-  }
-
+async function getCssColors(): Promise<{ error: string; success: string }> {
   try {
-    const result = (await browser.storage.local.get('customColor')) as { customColor?: string };
-    cachedSuccessColor = result.customColor || DEFAULT_SUCCESS_COLOR;
-    cachedErrorColor = DEFAULT_ERROR_COLOR;
-    return { error: cachedErrorColor, success: cachedSuccessColor || DEFAULT_SUCCESS_COLOR };
+    const root = document.documentElement;
+    const errorColor = getComputedStyle(root).getPropertyValue('--color-error').trim();
+    const successColor = getComputedStyle(root).getPropertyValue('--color-success').trim();
+    return {
+      error: errorColor || DEFAULT_ERROR_COLOR,
+      success: successColor || DEFAULT_SUCCESS_COLOR,
+    };
   } catch {
     return { error: DEFAULT_ERROR_COLOR, success: DEFAULT_SUCCESS_COLOR };
   }
@@ -27,7 +22,7 @@ export async function showTooltip(
   message: string,
   isError: boolean
 ): Promise<void> {
-  const { error, success } = await getThemeColors();
+  const { error, success } = await getCssColors();
   const backgroundColor = isError ? error : success;
 
   const tooltip = document.createElement('div');
@@ -44,7 +39,7 @@ export async function showTooltip(
     max-width: 250px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
     transition: opacity 0.3s;
-    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   `;
 
   const rect = element.getBoundingClientRect();
