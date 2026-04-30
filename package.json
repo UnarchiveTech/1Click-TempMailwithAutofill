@@ -50,5 +50,8 @@
     "email"
   ],
   "author": "UnarchiveTech",
-  "license": "MIT"
+  "license": "MIT",
+  "resolutions": {
+    "vite": "5.4.21"
+  }
 }
