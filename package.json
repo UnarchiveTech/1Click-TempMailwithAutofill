@@ -51,7 +51,7 @@
   ],
   "author": "UnarchiveTech",
   "license": "MIT",
-  "resolutions": {
+  "overrides": {
     "vite": "5.4.21"
   }
 }
