@@ -65,7 +65,7 @@ let {
 <div class="flex gap-1 px-4 pt-3 pb-2">
   {#each ['active', 'expired', 'archived'] as tab}
     <button
-      class="btn btn-sm flex-1 capitalize {mgmtTab === tab ? 'btn-primary' : 'btn-ghost text-base-content/60'}"
+      class="flex-1 px-3 py-1.5 text-sm capitalize rounded-lg {mgmtTab === tab ? 'bg-md-tertiary text-md-on-tertiary' : 'bg-transparent text-md-on-surface/60 hover:bg-md-secondary-container'} transition-colors"
       onclick={() => onTabChange(tab)}
     >
       {tab}
@@ -75,66 +75,66 @@ let {
 
 <!-- Search -->
 <div class="px-4 pb-2">
-  <label class="input input-bordered input-sm flex items-center gap-2 w-full">
-    <IconSearch class="w-4 h-4 text-base-content/40 shrink-0" />
-    <input type="text" class="grow text-sm" placeholder="Search emails by address, provider, or status..." bind:value={mgmtSearch} oninput={(e) => onSearchChange((e.target as HTMLInputElement).value)} />
-  </label>
+  <div class="flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-md-outline-variant text-sm bg-md-secondary-container">
+    <IconSearch class="w-4 h-4 text-md-on-surface/40 shrink-0" />
+    <input type="text" class="grow bg-transparent outline-none" placeholder="Search emails by address, provider, or status..." bind:value={mgmtSearch} oninput={(e) => onSearchChange((e.target as HTMLInputElement).value)} />
+  </div>
 </div>
 
 <!-- Select All + bulk actions -->
-<div class="flex items-center gap-2 px-4 py-2 border-b border-base-200">
+<div class="flex items-center gap-2 px-4 py-2 border-b border-md-secondary-container">
   <label class="flex items-center gap-2 cursor-pointer flex-1">
     <input
       type="checkbox"
-      class="checkbox checkbox-sm"
+      class="w-4 h-4 rounded"
       checked={allSelected}
       onchange={onToggleSelectAll}
     />
     <span class="text-sm font-medium">Select All</span>
-    <span class="text-xs text-base-content/50">{selectedAddresses.size} selected</span>
+    <span class="text-xs text-md-on-surface/50">{selectedAddresses.size} selected</span>
   </label>
   <!-- Bulk: Archive -->
   {#if mgmtTab === 'archived'}
     <button
-      class="btn btn-sm btn-square border-0 bg-success/15 hover:bg-success/30 disabled:opacity-30"
+      class="w-8 h-8 flex items-center justify-center rounded-lg border-0 bg-md-success/15 hover:bg-md-success/30 disabled:opacity-30 transition-colors"
       aria-label="Unarchive selected"
       disabled={selectedAddresses.size === 0}
       onclick={onUnarchiveSelected}
     >
-      <IconArchive class="w-4 h-4 text-success" />
+      <IconArchive class="w-4 h-4 text-md-success" />
     </button>
   {:else}
     <button
-      class="btn btn-sm btn-square border-0 bg-warning/15 hover:bg-warning/30 disabled:opacity-30"
+      class="w-8 h-8 flex items-center justify-center rounded-lg border-0 bg-md-warning/15 hover:bg-md-warning/30 disabled:opacity-30 transition-colors"
       aria-label="Archive selected"
       disabled={selectedAddresses.size === 0}
       onclick={onArchiveSelected}
     >
-      <IconArchive class="w-4 h-4 text-warning" />
+      <IconArchive class="w-4 h-4 text-md-warning" />
     </button>
   {/if}
   <!-- Bulk: Delete -->
   <button
-    class="btn btn-sm btn-square border-0 bg-error/15 hover:bg-error/30 disabled:opacity-30"
+    class="w-8 h-8 flex items-center justify-center rounded-lg border-0 bg-md-error/15 hover:bg-md-error/30 disabled:opacity-30 transition-colors"
     aria-label="Delete selected"
     disabled={selectedAddresses.size === 0}
     onclick={onDeleteSelected}
   >
-    <IconTrash class="w-4 h-4 text-error" />
+    <IconTrash class="w-4 h-4 text-md-error" />
   </button>
   <!-- Bulk: Export/Download -->
   <button
-    class="btn btn-sm btn-square border-0 bg-primary/15 hover:bg-primary/30 disabled:opacity-30"
+    class="w-8 h-8 flex items-center justify-center rounded-lg border-0 bg-md-primary/15 hover:bg-md-primary/30 disabled:opacity-30 transition-colors"
     aria-label="Export selected"
     disabled={selectedAddresses.size === 0}
     onclick={onExportSelected}
   >
-    <IconDownload class="w-4 h-4 text-primary" />
+    <IconDownload class="w-4 h-4 text-md-secondary" />
   </button>
 </div>
 
 <!-- Account cards list -->
-<div class="flex-1 overflow-y-auto divide-y divide-base-200" style="scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent;">
+<div class="flex-1 overflow-y-auto divide-y divide-md-secondary-container" style="scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--md-outline, #75777f) 0.2, transparent) transparent;">
   {#if loadingInboxes}
     <!-- Skeleton loader -->
     {#each Array(3) as _}
@@ -153,11 +153,11 @@ let {
     {/each}
   {:else}
     {#each mgmtAccounts as account}
-      <div class="flex items-start gap-3 px-4 py-3 hover:bg-base-200/50">
+      <div class="flex items-start gap-3 px-4 py-3 hover:bg-md-secondary-container/50">
         <!-- Checkbox -->
         <input
           type="checkbox"
-          class="checkbox checkbox-sm mt-1 shrink-0"
+          class="w-4 h-4 mt-1 shrink-0 rounded"
           checked={selectedAddresses.has(account.id)}
           onchange={() => onToggleSelect(account.id)}
         />
@@ -167,61 +167,60 @@ let {
           onclick={() => onOpenEmailDetail(account)}
         >
           <div class="font-bold text-sm truncate">{account.address}</div>
-          <div class="text-xs text-base-content/55 mt-0.5">Created: {account.created}, Last Used: {account.lastUsed}</div>
-          <div class="text-xs text-primary mt-0.5">{account.expiry}</div>
-          <div class="text-xs text-primary">Received Mails: {account.received}</div>
-          <div class="text-xs text-base-content/55">Provider: {account.provider}</div>
+          <div class="text-xs text-md-secondary mt-0.5">Created: {account.created}, Last Used: {account.lastUsed}</div>
+          <div class="text-xs text-md-secondary">Provider: {account.provider}</div>
+          <div class="text-xs text-md-primary">Received Mails: {account.received}</div>
         </button>
         <!-- Row actions -->
         <div class="flex items-center gap-1 shrink-0 mt-1">
           {#if account.providerConfig?.expiry?.renewable}
             <button
-              class="btn btn-sm btn-square border-0 bg-info/15 hover:bg-info/30"
+              class="w-8 h-8 flex items-center justify-center rounded-lg border-0 bg-md-primary/15 hover:bg-md-primary/30 transition-colors"
               aria-label="Edit email address"
               onclick={() => onEditAccount(account)}
             >
-              <IconEditSquare class="w-4 h-4 text-info" />
+              <IconEditSquare class="w-4 h-4 text-md-primary" />
             </button>
             <button
-              class="btn btn-sm btn-square border-0 bg-success/15 hover:bg-success/30"
+              class="w-8 h-8 flex items-center justify-center rounded-lg border-0 bg-md-success/15 hover:bg-md-success/30 transition-colors"
               aria-label="Extend email expiry"
               onclick={() => onExtendAccount(account)}
             >
-              <IconRefresh class="w-4 h-4 text-success" />
+              <IconRefresh class="w-4 h-4 text-md-success" />
             </button>
           {/if}
           {#if mgmtTab === 'archived' && canUnarchive(account)}
             <button
-              class="btn btn-sm btn-square border-0 bg-success/15 hover:bg-success/30"
+              class="w-8 h-8 flex items-center justify-center rounded-lg border-0 bg-md-success/15 hover:bg-md-success/30 transition-colors"
               aria-label="Unarchive {account.address}"
               onclick={() => onUnarchiveAccount(account)}
             >
-              <IconArchive class="w-4 h-4 text-success" />
+              <IconArchive class="w-4 h-4 text-md-success" />
             </button>
           {:else if mgmtTab !== 'archived'}
             <button
-              class="btn btn-sm btn-square border-0 bg-warning/15 hover:bg-warning/30"
+              class="w-8 h-8 flex items-center justify-center rounded-lg border-0 bg-md-warning/15 hover:bg-md-warning/30 transition-colors"
               aria-label="Archive {account.address}"
               onclick={() => onArchiveAccount(account)}
             >
-              <IconArchive class="w-4 h-4 text-warning" />
+              <IconArchive class="w-4 h-4 text-md-warning" />
             </button>
           {/if}
           <button
-            class="btn btn-sm btn-square border-0 bg-primary/15 hover:bg-primary/30"
+            class="w-8 h-8 flex items-center justify-center rounded-lg border-0 bg-md-primary/15 hover:bg-md-primary/30 transition-colors"
             aria-label="Export {account.address}"
             onclick={() => onExportAccountEmails(account)}
           >
-            <IconDownload class="w-4 h-4 text-primary" />
+            <IconDownload class="w-4 h-4 text-md-secondary" />
           </button>
         </div>
       </div>
     {:else}
       <div class="px-4 py-8 text-center">
-        <IconInbox class="w-12 h-12 text-base-content/30 mx-auto mb-3" />
-        <p class="text-sm text-base-content/50 mb-3">No {mgmtTab} addresses found</p>
+        <IconInbox class="w-12 h-12 text-md-on-surface/30 mx-auto mb-3" />
+        <p class="text-sm text-md-on-surface/50 mb-3">No {mgmtTab} addresses found</p>
         {#if mgmtTab === 'active'}
-          <button class="btn btn-sm btn-primary" onclick={onGenerateNewAddress}>
+          <button class="px-3 py-1.5 text-sm rounded-lg bg-md-primary text-md-on-primary hover:bg-md-primary/90 transition-colors" onclick={onGenerateNewAddress}>
             Generate New Address
           </button>
         {/if}

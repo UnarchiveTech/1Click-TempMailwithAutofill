@@ -1,6 +1,6 @@
 import { mount } from 'svelte';
-import App from './App.svelte';
-import './app.css';
+import App from './Sidepanel.svelte';
+import './sidepanel.css';
 
 interface BrowserAPI {
   runtime?: {

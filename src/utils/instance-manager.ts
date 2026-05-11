@@ -4,7 +4,7 @@
  */
 
 import { browser } from 'wxt/browser';
-import { DEFAULT_PROVIDER, loadProviderConfig } from '@/services/email-service.js';
+import { DEFAULT_PROVIDER, loadProviderConfig } from '@/utils/email-service.js';
 import { ProviderInstanceNotFoundError } from '@/utils/errors.js';
 import { logError } from '@/utils/logger.js';
 import type { ProviderInstance } from '@/utils/types.js';
@@ -127,55 +127,6 @@ export async function removeCustomProviderInstance(
     (instance: ProviderInstance) => instance.id !== instanceId
   );
   await browser.storage.local.set({ [storageKey]: filtered });
-}
-
-/**
- * Legacy functions for backward compatibility with existing browser storage.
- * These functions are specific to the 'burner' provider for historical reasons.
- * The storage keys (selectedBurnerInstance, customBurnerInstances) are kept as-is
- * to avoid breaking existing user data. Future versions should migrate to provider-agnostic keys.
- */
-
-/**
- * Get all burner instances (predefined + custom)
- * @deprecated Use getProviderInstancesWithCustom('burner') instead
- */
-export async function getBurnerInstances(): Promise<ProviderInstance[]> {
-  return getProviderInstancesWithCustom('burner');
-}
-
-/**
- * Get selected burner instance
- * @deprecated Use getSelectedProviderInstance('burner') instead
- */
-export async function getSelectedBurnerInstance(): Promise<ProviderInstance | null> {
-  return getSelectedProviderInstance('burner');
-}
-
-/**
- * Set selected burner instance
- * @deprecated Use setProviderInstance('burner', instanceId) instead
- */
-export async function setBurnerInstance(instanceId: string): Promise<void> {
-  return setProviderInstance('burner', instanceId);
-}
-
-/**
- * Add custom burner instance
- * @deprecated Use addCustomProviderInstance('burner', instance) instead
- */
-export async function addCustomBurnerInstance(
-  instance: Omit<ProviderInstance, 'id' | 'isCustom'>
-): Promise<void> {
-  return addCustomProviderInstance('burner', instance);
-}
-
-/**
- * Remove custom burner instance
- * @deprecated Use removeCustomProviderInstance('burner', instanceId) instead
- */
-export async function removeCustomBurnerInstance(instanceId: string): Promise<void> {
-  return removeCustomProviderInstance('burner', instanceId);
 }
 
 /**

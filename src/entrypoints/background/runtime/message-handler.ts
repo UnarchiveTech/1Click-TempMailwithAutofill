@@ -2,7 +2,7 @@
  * Runtime message handler — routes incoming messages to the appropriate module functions
  */
 
-import { DEFAULT_PROVIDER, EmailService, loadProviderConfig } from '@/services/email-service.js';
+import { DEFAULT_PROVIDER, EmailService, loadProviderConfig } from '@/utils/email-service.js';
 import {
   addCustomProviderInstance,
   getProviderInstances,
@@ -12,6 +12,7 @@ import {
 } from '@/utils/instance-manager.js';
 import { logError, logInfo } from '@/utils/logger.js';
 import type { Account, ProviderInstance } from '@/utils/types.js';
+import { validateCustomInstanceName, validateCustomInstanceUrl } from '@/utils/validation.js';
 import { handleUpdateSessionCredentials } from '../credentials/session-credentials.js';
 import { getAnalytics } from '../inbox/analytics.js';
 import { archiveInboxEmails, getArchivedEmails } from '../inbox/email-storage.js';
@@ -38,7 +39,7 @@ export function registerMessageHandler(): void {
             const provider = message.provider || selectedProvider;
             const instanceId = message.instanceId;
 
-            const inbox = await createInbox(provider, instanceId, message.user);
+            const inbox = await createInbox(provider, instanceId, message.emailUser);
             sendResponse({ success: true, inbox });
           } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -114,9 +115,7 @@ export function registerMessageHandler(): void {
               return;
             }
             inboxes[inboxIndex].tag = message.tag;
-            if (message.color) {
-              inboxes[inboxIndex].tagColor = message.color;
-            }
+            inboxes[inboxIndex].tagColor = message.color || null;
             await browser.storage.local.set({ inboxes });
             sendResponse({ success: true });
           } catch (error: unknown) {
@@ -378,12 +377,12 @@ export function registerMessageHandler(): void {
       if (message.action === 'addCustomInstance') {
         (async () => {
           try {
+            const instance = message.instance as Omit<ProviderInstance, 'id' | 'isCustom'>;
+            validateCustomInstanceName(instance.name);
+            validateCustomInstanceUrl(instance.apiUrl);
             const { selectedProvider } = await browser.storage.local.get(['selectedProvider']);
             const provider = (selectedProvider as string) || DEFAULT_PROVIDER;
-            await addCustomProviderInstance(
-              provider,
-              message.instance as Omit<ProviderInstance, 'id' | 'isCustom'>
-            );
+            await addCustomProviderInstance(provider, instance);
             sendResponse({ success: true });
           } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -439,12 +438,12 @@ export function registerMessageHandler(): void {
       if (message.action === 'addCustomBurnerInstance') {
         (async () => {
           try {
+            const instance = message.instance as Omit<ProviderInstance, 'id' | 'isCustom'>;
+            validateCustomInstanceName(instance.name);
+            validateCustomInstanceUrl(instance.apiUrl);
             const { selectedProvider } = await browser.storage.local.get(['selectedProvider']);
             const provider = (selectedProvider as string) || DEFAULT_PROVIDER;
-            await addCustomProviderInstance(
-              provider,
-              message.instance as Omit<ProviderInstance, 'id' | 'isCustom'>
-            );
+            await addCustomProviderInstance(provider, instance);
             sendResponse({ success: true });
           } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -525,6 +524,41 @@ export function registerMessageHandler(): void {
             sendResponse({ success: true, data });
           } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
+            sendResponse({ success: false, error: msg });
+          }
+        })();
+        return true;
+      }
+
+      if (message.type === 'fetchFavicon') {
+        (async () => {
+          try {
+            const { url } = message as { url: string };
+            console.log('fetchFavicon requested:', url);
+            const response = await fetch(url);
+            console.log('fetchFavicon response status:', response.status);
+            if (!response.ok) {
+              sendResponse({ success: false, error: `HTTP ${response.status}` });
+              return;
+            }
+            const buffer = await response.arrayBuffer();
+            const uint8 = new Uint8Array(buffer);
+            console.log('fetchFavicon buffer size:', uint8.length);
+            // Compute SHA-256 hash in background (MD5 not supported by Web Crypto)
+            const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hash = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+            console.log('fetchFavicon hash:', hash);
+            // Convert to base64 for transfer
+            let binary = '';
+            for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
+            const base64 = btoa(binary);
+            const contentType = response.headers.get('content-type') || 'image/x-icon';
+            console.log('fetchFavicon success, sending response');
+            sendResponse({ success: true, base64, contentType, hash });
+          } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('fetchFavicon error:', msg);
             sendResponse({ success: false, error: msg });
           }
         })();

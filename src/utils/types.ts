@@ -55,13 +55,6 @@ export interface StoredSettings {
   developerSettings?: DeveloperSettings;
 }
 
-export interface ProviderConfig {
-  name: string;
-  displayName: string;
-  apiUrl: string;
-  type: MailProvider;
-}
-
 export interface ProviderInstance {
   id: string;
   name: string;
@@ -84,7 +77,8 @@ export type ActivityEventType =
   | 'notification_sent'
   | 'account_created'
   | 'account_deleted'
-  | 'auto_fill';
+  | 'auto_fill'
+  | 'toast_notification';
 
 export interface ActivityEvent {
   id: string;
@@ -97,6 +91,8 @@ export interface ActivityEvent {
     sender?: string;
     subject?: string;
     website?: string;
+    message?: string; // For toast notifications
+    toastType?: 'success' | 'error' | 'warning' | 'info'; // For toast notifications
   };
 }
 
@@ -117,6 +113,7 @@ export interface Account {
   tag?: string;
   tagColor?: string;
   archived?: boolean;
+  deleted?: boolean;
   instanceUrl?: string; // For multi-instance providers
   // UI-specific properties
   expiry?: string; // Formatted expiry string
@@ -140,6 +137,7 @@ export interface Email {
   archived_at?: number;
   stored_at?: number; // ms timestamp (when we stored it)
   original_inbox?: string;
+  local_only?: boolean; // Email only exists locally, not in API
   // UI-specific properties
   time?: string; // Formatted time string
   isOtp?: boolean;
@@ -153,6 +151,19 @@ export interface SavedLogin {
   email: string;
   password: string;
   otp?: string;
+}
+
+export interface Identity {
+  id: string;
+  name: string;
+  firstNames: string;
+  lastNames: string;
+  useRandomPassword: boolean;
+  customPassword?: string;
+  phone?: string;
+  pin?: string;
+  isDefault: boolean;
+  createdAt: number;
 }
 
 export interface NotificationSettings {

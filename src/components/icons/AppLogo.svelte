@@ -1,7 +1,7 @@
 <div class="flex items-center">
   <svg width="36" height="36" viewBox="0 0 900 900" xmlns="http://www.w3.org/2000/svg" class="h-7 w-auto mr-2 shrink-0">
     <style>
-      .logo-bg { fill: var(--color-primary, #2563EB); }
+      .logo-bg { fill: var(--md-primary, #445e91); }
     </style>
     <rect x="10" y="10" width="880" height="880" rx="100" ry="100" class="logo-bg"/>
     <defs>
@@ -16,8 +16,8 @@
     </g>
   </svg>
   <div class="flex items-center gap-2">
-    <span class="text-lg font-extrabold text-base-content" style="font-family: 'Inter', system-ui, sans-serif; letter-spacing: -0.5px; line-height: 1;">1Click</span>
-    <div class="w-px self-stretch" style="background-color: var(--color-primary, #2563EB);"></div>
-    <span class="text-base-content/80" style="font-family: 'Inter', system-ui, sans-serif; font-size: 10px; line-height: 1.1; font-weight: 600;">Temp Mail &<br/>Autofill Form</span>
+    <span class="text-lg font-extrabold text-md-on-surface" style="font-family: system-ui, sans-serif; letter-spacing: -0.5px; line-height: 1;">1Click</span>
+    <div class="w-px self-stretch" style="background-color: var(--md-primary, #445e91);"></div>
+    <span class="text-md-on-surface/80" style="font-family: system-ui, sans-serif; font-size: 10px; line-height: 1.1; font-weight: 600;">Temp Mail &<br/>Autofill Form</span>
   </div>
 </div>

@@ -1,4 +1,4 @@
-import { DEFAULT_PROVIDER, loadProviderConfig } from '@/services/email-service.js';
+import { DEFAULT_PROVIDER, loadProviderConfig } from '@/utils/email-service.js';
 import { ApiError, ValidationError } from '@/utils/errors.js';
 import { setProviderInstance as setProviderInstanceStorage } from '@/utils/instance-manager.js';
 import { logError } from '@/utils/logger.js';

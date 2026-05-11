@@ -40,3 +40,13 @@ export async function addActivityEvent(
 export async function clearActivityEvents(): Promise<void> {
   await browser.storage.local.remove(['activityEvents']);
 }
+
+export async function addToastNotification(
+  message: string,
+  toastType: 'success' | 'error' | 'warning' | 'info'
+): Promise<void> {
+  await addActivityEvent('toast_notification', {
+    message,
+    toastType,
+  });
+}

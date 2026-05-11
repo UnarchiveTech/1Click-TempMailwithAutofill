@@ -21,12 +21,14 @@ type View =
   | 'archivedEmails'
   | 'emailDetail'
   | 'messageDetail'
-  | 'about';
+  | 'about'
+  | 'identities';
 
 const navItems: { view: View; label: string; icon: Component }[] = [
   { view: 'main', label: 'Inbox', icon: IconMail },
   { view: 'mailSettings', label: 'Manage', icon: IconArchive },
   { view: 'loginInfo', label: 'Saved', icon: IconUser },
+  { view: 'identities', label: 'Identities', icon: IconUser },
   { view: 'analytics', label: 'Activity', icon: IconBarChart },
   { view: 'settings', label: 'Settings', icon: IconSettings },
   { view: 'about', label: 'About', icon: IconInfo },
@@ -36,24 +38,24 @@ const navItems: { view: View; label: string; icon: Component }[] = [
 <!-- Floating Island Nav -->
 <div class="flex justify-center w-full py-2 px-0">
   <nav
-    class="flex items-center justify-around gap-0 px-0 py-1.5 rounded-full backdrop-blur-3xl bg-base-100/50 border border-white/10 shadow-xl"
-    style="width: 96%; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.15) inset, 0 0 0 1px rgba(0, 0, 0, 0.05);"
+    class="flex items-center justify-around gap-0 px-0 py-1.5 rounded-full backdrop-blur-3xl bg-md-surface/50 border border-white/10 shadow-xl"
+    style="width: 96%; box-shadow: 0 8px 32px color-mix(in srgb, var(--md-shadow, #000000) 12%, transparent), 0 0 0 1px color-mix(in srgb, var(--md-inverse-surface, #e2e2e9) 15%, transparent) inset, 0 0 0 1px color-mix(in srgb, var(--md-outline, #75777f) 5%, transparent);"
     aria-label="Main navigation"
   >
     {#each navItems as item}
       {@const isActive = currentView === item.view}
       <button
-        class="relative flex flex-col items-center gap-0.5 px-1.5 py-1.5 rounded-full transition-all duration-200 hover:scale-105 active:scale-95 {isActive ? 'bg-primary/10' : 'hover:bg-base-200/70'}"
+        class="relative flex flex-col items-center gap-0.5 px-1.5 py-1.5 rounded-full transition-all duration-200 hover:scale-105 active:scale-95 {isActive ? 'bg-md-primary/10' : 'hover:bg-md-surface-variant'}"
         aria-label={item.label}
         aria-current={isActive ? 'page' : undefined}
         onclick={() => onNavigate(item.view)}
       >
-        <item.icon class="w-4 h-4 transition-colors duration-200 {isActive ? 'text-primary' : 'text-base-content/50'}" />
-        <span class="text-[10px] font-semibold leading-none transition-colors duration-200 {isActive ? 'text-primary' : 'text-base-content/50'}">
+        <item.icon class="w-4 h-4 transition-colors duration-200 {isActive ? 'text-md-primary' : 'text-md-on-surface/50'}" />
+        <span class="text-[10px] font-semibold leading-none transition-colors duration-200 {isActive ? 'text-md-primary' : 'text-md-on-surface/50'}">
           {item.label}
         </span>
         {#if isActive}
-          <span class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary"></span>
+          <span class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-md-primary"></span>
         {/if}
       </button>
     {/each}

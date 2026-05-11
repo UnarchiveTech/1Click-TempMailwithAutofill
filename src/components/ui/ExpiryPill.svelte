@@ -14,21 +14,26 @@ const {
   autoRenew,
   maxExpiryTime = 60,
   onToggleAutoRenew,
-  themeColor = 'var(--color-primary)',
+  themeColor = 'var(--md-primary)',
 }: Props = $props();
 
 // Calculate progress percentage (0-100)
 const progressPercentage = $derived(Math.min(Math.max((expiryTime / maxExpiryTime) * 100, 0), 100));
 
 // Calculate time remaining text
-const timeText = $derived(`${Math.ceil(expiryTime)}m`);
+let timeText = $state('');
+$effect(() => {
+  const h = Math.floor(expiryTime / 60);
+  const m = expiryTime % 60;
+  timeText = h > 0 ? `${h}:${m.toString().padStart(2, '0')}` : `${Math.ceil(expiryTime)}m`;
+});
 
 // Status text based on auto-renew state
 const statusText = $derived(autoRenew ? `Auto-renews in ${timeText}` : `Expires in ${timeText}`);
 
 // Icon color based on auto-renew state
 const iconColorClass = $derived(
-  autoRenew ? 'text-[var(--theme-primary)]' : 'text-slate-400 dark:text-slate-500'
+  autoRenew ? 'text-[var(--md-primary)]' : 'text-md-on-surface-variant'
 );
 
 // Build the conic gradient: theme color sweeps clockwise to show progress, base color fills the rest
@@ -48,28 +53,28 @@ const borderGradient = $derived(
 
   /* Inner content area — opaque background hides the gradient in the center */
   .expiry-pill {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: system-ui, sans-serif;
     padding: 0.25rem 0.5rem;
     border-radius: 9999px;
     background: var(--ep-bg);
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.375rem;
     min-width: 116px;
-    height: 18px;
+    height: 24px;
     color: var(--ep-text);
   }
 
   :global(:root) {
-    --ep-border-base: var(--color-base-300);
-    --ep-bg: var(--color-base-100);
-    --ep-text: var(--color-base-content);
+    --ep-border-base: var(--md-secondary-container);
+    --ep-bg: var(--md-surface);
+    --ep-text: var(--md-on-surface);
   }
 
-  :global(.dark) {
-    --ep-border-base: var(--color-base-300);
-    --ep-bg: var(--color-base-100);
-    --ep-text: var(--color-base-content);
+  :global([data-theme="dark"]) {
+    --ep-border-base: var(--md-secondary-container);
+    --ep-bg: var(--md-surface);
+    --ep-text: var(--md-on-surface);
   }
 
   .clock-button {
@@ -79,28 +84,28 @@ const borderGradient = $derived(
     padding: 0.125rem;
     border-radius: 0.75rem;
     cursor: pointer;
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     flex-shrink: 0;
   }
 
   .clock-button:hover {
-    background-color: rgba(99, 102, 241, 0.15);
+    background-color: color-mix(in srgb, var(--md-primary, #445e91) 15%, transparent);
   }
 
   .icon-display {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     flex-shrink: 0;
     border-radius: 0.75rem;
   }
 
   .status-text {
-    font-size: 0.625rem;
-    font-weight: 500;
+    font-size: 0.6875rem;
+    font-weight: 700;
     color: currentColor;
     padding-right: 0.25rem;
     white-space: nowrap;
@@ -109,7 +114,7 @@ const borderGradient = $derived(
 
 <div
   class="expiry-pill-outer"
-  style="--border-gradient: {borderGradient}; --theme-primary: {themeColor};"
+  style="--border-gradient: {borderGradient}; --md-primary: {themeColor};"
 >
   <div class="expiry-pill">
     {#if onToggleAutoRenew}

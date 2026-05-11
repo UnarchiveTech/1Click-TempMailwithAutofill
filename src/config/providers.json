@@ -184,7 +184,7 @@
       "multiInstance": false,
       "supportsCustomInstance": false,
       "icon": "envelope",
-      "color": "text-orange-500",
+      "color": "text-md-warning",
       "description": "Auto-renewing · Editable address"
     }
   },
@@ -321,7 +321,7 @@
       "multiInstance": true,
       "supportsCustomInstance": true,
       "icon": "flame",
-      "color": "text-blue-500",
+      "color": "text-md-primary",
       "description": "24-hour expiry · Multiple instances"
     }
   }

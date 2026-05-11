@@ -52,16 +52,16 @@ export async function generateQRCode(canvas: HTMLCanvasElement, text: string, cu
     // Get the primary color from CSS variable or use custom color
     const primaryColor =
       customColor ||
-      getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() ||
-      'var(--color-primary)';
+      getComputedStyle(document.documentElement).getPropertyValue('--md-primary').trim() ||
+      'var(--md-primary)';
     await QRCode.toCanvas(canvas, text, {
       width: 160,
       margin: 2,
       color: {
         dark: primaryColor,
         light:
-          getComputedStyle(document.documentElement).getPropertyValue('--color-base-100').trim() ||
-          'var(--color-base-100)',
+          getComputedStyle(document.documentElement).getPropertyValue('--md-surface').trim() ||
+          'var(--md-surface)',
       },
     });
   } catch (e) {

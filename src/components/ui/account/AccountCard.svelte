@@ -1,12 +1,9 @@
 <script lang="ts">
 import IconArchive from '@/components/icons/IconArchive.svelte';
-import IconAutoRenew from '@/components/icons/IconAutoRenew.svelte';
-import IconClock from '@/components/icons/IconClock.svelte';
-import IconEditSquare from '@/components/icons/IconEditSquare.svelte';
 import IconTrash from '@/components/icons/IconTrash.svelte';
 import ExpiryPill from '@/components/ui/ExpiryPill.svelte';
-import { canUnarchive } from '@/features/inbox/inbox-management.js';
-import { loadProviderConfig } from '@/services/email-service.js';
+import TagPill from '@/components/ui/TagPill.svelte';
+import { loadProviderConfig } from '@/utils/email-service.js';
 import type { Account } from '@/utils/types.js';
 
 let {
@@ -20,6 +17,14 @@ let {
   onEditAccount = () => {},
   onRemoveAccount = () => {},
   onTagAccount = () => {},
+  isInAvailable = false,
+  isInUnavailable = false,
+  draggable = false,
+  onDragStart = () => {},
+  onDragEnd = () => {},
+  onDrop = () => {},
+  isDragging = false,
+  isDropTarget = false,
 } = $props<{
   account: Account;
   selectedEmail?: string;
@@ -31,164 +36,180 @@ let {
   onEditAccount?: (account: Account) => void;
   onRemoveAccount?: (address: string) => void;
   onTagAccount?: (account: Account) => void;
+  isInAvailable?: boolean;
+  isInUnavailable?: boolean;
+  draggable?: boolean;
+  onDragStart?: (e: DragEvent, account: Account) => void;
+  onDragEnd?: () => void;
+  onDrop?: (e: DragEvent) => void;
+  isDragging?: boolean;
+  isDropTarget?: boolean;
 }>();
 
-let hoveredAccountId = $state<string | null>(null);
+let currentTime = $state(Date.now());
 
-const supportsCustomEmail = $derived(() => {
-  const providerConfig = loadProviderConfig(account.provider);
-  return providerConfig.ui?.supportsCustomEmail || false;
-});
-
-const expiryProgress = $derived(() => {
-  const now = Date.now();
-  const created = account.createdAt || now - 24 * 60 * 60 * 1000;
-  const expires = account.expiresAt || now + 1000;
-  const total = expires - created;
-  const remaining = expires - now;
-  if (total <= 0) return 0;
-  const pct = Math.max(0, Math.min(100, (remaining / total) * 100));
-  return Math.round(pct);
+// Update current time every second for live countdown
+$effect(() => {
+  const interval = setInterval(() => {
+    currentTime = Date.now();
+  }, 1000);
+  return () => clearInterval(interval);
 });
 
 const expiryTimeMinutes = $derived(() => {
-  const now = Date.now();
-  const expires = account.expiresAt || now + 1000;
-  const remainingMs = expires - now;
+  const expires = account.expiresAt || currentTime + 1000;
+  const remainingMs = expires - currentTime;
   return Math.max(0, Math.ceil(remainingMs / (60 * 1000)));
+});
+
+// Get status tag for the account
+const statusTag = $derived(() => {
+  if (account.status === 'archived')
+    return { label: 'Archived', color: 'bg-md-surface-variant/20 text-md-on-surface/60' };
+  if (account.status === 'deleted')
+    return { label: 'Deleted', color: 'bg-md-error/20 text-md-error' };
+  if (account.status === 'expired')
+    return { label: 'Expired', color: 'bg-md-error/20 text-md-error' };
+  return null;
+});
+
+// Check if auto-renew is available for this account
+const isAutoRenewAvailable = $derived(() => {
+  const isExpired = currentTime >= (account.expiresAt || currentTime);
+  const isAutoExtendDisabled = !account.autoExtend;
+
+  try {
+    const config = loadProviderConfig(account.provider);
+    const supportsAutoRenew = config.expiry?.renewable || false;
+    return isExpired && isAutoExtendDisabled && supportsAutoRenew;
+  } catch {
+    return false;
+  }
+});
+
+// Check if provider supports auto-renew at all
+const supportsAutoRenew = $derived(() => {
+  try {
+    const config = loadProviderConfig(account.provider);
+    return config.expiry?.renewable || false;
+  } catch {
+    return false;
+  }
 });
 </script>
 
-<div class="px-2 py-1.5 bg-base-200 rounded-xl group/item overflow-hidden" role="listitem">
-  <!-- Email address row -->
-  <button
-    class="flex items-center w-full text-left min-w-0 cursor-pointer bg-transparent border-0 p-0 overflow-hidden mb-1 focus:outline-none focus:ring-2 focus:ring-primary/20 rounded"
-    aria-label={`Select inbox ${account.address}`}
-    onclick={() => onSelectAccount(account.address)}
-  >
-    <span class="font-semibold text-sm truncate {selectedEmail === account.address ? 'text-primary' : 'text-base-content'}">
-      {account.address}
-    </span>
-  </button>
-
-  {#if isArchived}
-    <!-- Archived view: simpler actions -->
-    <div class={`flex items-center justify-between gap-2 transition-all duration-200 ease-in-out ${hoveredAccountId === account.id ? 'hidden' : ''}`}>
-      <span class="text-[10px] px-2 py-0.5 rounded-full bg-base-content/10 text-base-content/50">{account.expiry}</span>
-      <div class="flex gap-1 shrink-0" role="toolbar" tabindex="0" onmouseenter={() => hoveredAccountId = account.id} onmouseleave={() => hoveredAccountId = null}>
-        {#if canUnarchive(account)}
-          <button class="btn btn-ghost btn-xs btn-square rounded-lg" aria-label="Unarchive" onclick={(e) => { e.stopPropagation(); onUnarchiveAccount(account); }}>
-            <IconArchive class="w-3.5 h-3.5 text-success" />
-          </button>
-        {/if}
-        <button class="btn btn-ghost btn-xs btn-square rounded-lg" aria-label="Delete" onclick={(e) => { e.stopPropagation(); onRemoveAccount(account.address); }}>
-          <IconTrash class="w-3.5 h-3.5 text-error" />
-        </button>
-      </div>
-    </div>
-    <!-- Expanded archived view -->
-    <div class={`grid grid-cols-4 gap-1 pt-1 animate-in fade-in slide-in-from-top-2 duration-300 ${hoveredAccountId === account.id ? '' : 'hidden'}`} onmouseenter={() => hoveredAccountId = account.id} onmouseleave={() => hoveredAccountId = null} role="toolbar" tabindex="0">
-      {#if canUnarchive(account)}
+<div 
+  class="px-2 py-1.5 bg-md-surface-container-low rounded-xl group/item overflow-hidden {draggable ? 'cursor-move' : ''} {isDragging ? 'opacity-50' : ''} {isDropTarget ? 'border-2 border-md-primary' : ''}" 
+  role="listitem"
+  draggable={draggable}
+  ondragstart={(e) => onDragStart(e, account)}
+  ondragend={onDragEnd}
+  ondragover={(e) => e.preventDefault()}
+  ondrop={onDrop}
+>
+  <div class="flex gap-1 items-center">
+    <!-- First column: email address, toggle, and tag -->
+    <div class="flex flex-col gap-2 flex-1 min-w-0">
+      <!-- Email address with status tag -->
+      <div class="flex items-center gap-1">
         <button
-          class="flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg hover:bg-success/10 transition-all duration-150 group/btn"
-          aria-label="Unarchive"
-          onclick={(e) => { e.stopPropagation(); onUnarchiveAccount(account); }}
+          class="flex items-center text-left min-w-0 cursor-pointer bg-transparent border-0 p-0 overflow-hidden focus:outline-none focus:ring-2 focus:ring-md-primary/20 rounded"
+          aria-label={`Select inbox ${account.address}`}
+          onclick={() => onSelectAccount(account.address)}
         >
-          <IconArchive class="w-4 h-4 text-base-content/50 group-hover/btn:text-success group-hover/btn:scale-110 transition-all duration-150" />
-          <span class="text-[10px] text-base-content/50 group-hover/btn:text-success transition-colors duration-150">Unarchive</span>
+          <span class="font-semibold text-sm truncate {selectedEmail === account.address ? 'text-md-primary' : 'text-md-on-surface'}">
+            {account.address}
+          </span>
         </button>
-      {:else}
-        <div></div>
-      {/if}
-      <div></div><div></div>
-      <button
-        class="flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg hover:bg-error/10 transition-all duration-150 group/btn"
-        aria-label="Delete"
-        onclick={(e) => { e.stopPropagation(); onRemoveAccount(account.address); }}
-      >
-        <IconTrash class="w-4 h-4 text-base-content/50 group-hover/btn:text-error group-hover/btn:scale-110 transition-all duration-150" />
-        <span class="text-[10px] text-base-content/50 group-hover/btn:text-error transition-colors duration-150">Delete</span>
-      </button>
-    </div>
-  {:else}
-    <!-- Active view: pills left, 2x2 grid right -->
-    <div class={`flex items-end justify-between gap-2 transition-all duration-200 ease-in-out ${hoveredAccountId === account.id ? 'hidden' : ''}`}>
-      <!-- Pills -->
-      <div class="flex flex-col gap-1">
-        <button
-          class="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full w-fit text-left transition-colors {account.tag ? 'bg-base-content/10 text-base-content/70 hover:bg-base-content/20' : 'bg-base-content/5 text-base-content/40 italic hover:bg-base-content/10'}"
-          onclick={(e) => { e.stopPropagation(); onTagAccount(account); }}
-          aria-label="{account.tag ? 'Edit tag' : 'Add a tag'}"
-        >{account.tag || 'Add a tag'}</button>
-        <!-- Expiry pill with progress border and toggle button -->
-        <ExpiryPill
-          expiryTime={expiryTimeMinutes()}
-          autoRenew={account.autoExtend}
-          onToggleAutoRenew={() => onToggleAutoExtend(account)}
+        {#if statusTag()}
+          <span class="text-[9px] px-1.5 py-0.5 rounded-full {statusTag()!.color} shrink-0">{statusTag()!.label}</span>
+        {/if}
+      </div>
+
+      <!-- Toggle button with time and tag pill -->
+      <div class="flex items-center gap-1 flex-wrap w-fit shrink-0">
+        <div class="flex items-center gap-1 rounded-full zinc-btn-copy border border-md-secondary-container/10">
+          {#if supportsAutoRenew()}
+            <button
+              class="inline-flex items-center justify-between h-5 w-[90px] rounded-full {account.autoExtend ? 'pl-2 pr-0' : 'pl-0 pr-2'} transition-colors duration-200 {account.autoExtend ? 'bg-md-primary' : 'bg-md-surface-variant/30'}"
+              aria-label="Toggle auto-renew"
+              onclick={(e) => { e.stopPropagation(); onToggleAutoExtend(account); }}
+            >
+              {#if account.autoExtend}
+                <span class="text-[10px] font-semibold text-white flex-1 text-center">Auto-Renew</span>
+                <span class="w-4.5 h-4.5 bg-white rounded-full shadow-sm shrink-0"></span>
+              {:else}
+                <span class="w-4.5 h-4.5 bg-white rounded-full shadow-sm shrink-0"></span>
+                <span class="text-[10px] font-semibold text-white/80 flex-1 text-center">Expiry</span>
+              {/if}
+            </button>
+          {/if}
+          <span class="text-[10px] font-medium text-md-on-surface/60 whitespace-nowrap pr-1">
+            {#if supportsAutoRenew()}
+              {#if expiryTimeMinutes() >= 60}
+                In {Math.floor(expiryTimeMinutes() / 60)}:{expiryTimeMinutes() % 60}m
+              {:else}
+                In {expiryTimeMinutes()}m
+              {/if}
+            {:else}
+              {#if expiryTimeMinutes() >= 60}
+                Expires in {Math.floor(expiryTimeMinutes() / 60)}:{expiryTimeMinutes() % 60}m
+              {:else}
+                Expires in {expiryTimeMinutes()}m
+              {/if}
+            {/if}
+          </span>
+        </div>
+        <TagPill
+          tag={account.tag}
+          tagColor={account.tagColor}
+          onClick={() => onTagAccount(account)}
+          showIcon={false}
         />
       </div>
-      <!-- 2x2 icon grid wrapper -->
-      <div class="grid grid-cols-2 gap-0 shrink-0" role="toolbar" tabindex="0" onmouseenter={() => hoveredAccountId = account.id} onmouseleave={() => hoveredAccountId = null}>
+    </div>
+
+
+    <!-- Second column: Delete and Archive buttons -->
+    <div class="flex flex-col gap-1 shrink-0">
+      {#if account.status === 'deleted'}
         <button
-          class="btn btn-ghost btn-xs btn-square rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+          class="text-[10px] px-2 py-1 rounded-full zinc-btn-archive flex items-center justify-center gap-1"
+          aria-label="Restore inbox {account.address}"
+          onclick={(e) => { e.stopPropagation(); onRemoveAccount(account.address); }}
+        >
+          <IconArchive class="w-3 h-3" />
+          <span>Restore</span>
+        </button>
+      {:else}
+        <button
+          class="text-[10px] px-2 py-1 rounded-full zinc-btn-forget flex items-center justify-center gap-1"
           aria-label="Delete inbox {account.address}"
           onclick={(e) => { e.stopPropagation(); onRemoveAccount(account.address); }}
         >
-          <IconTrash class="w-3.5 h-3.5 text-error" />
+          <IconTrash class="w-3 h-3" />
+          <span>Delete</span>
         </button>
-        <div></div>
+      {/if}
+      {#if account.status === 'archived'}
         <button
-          class="btn btn-ghost btn-xs btn-square rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-          aria-label="Archive inbox {account.address}"
-          onclick={(e) => { e.stopPropagation(); onArchiveAccount(account); }}
+          class="text-[10px] px-2 py-1 rounded-full zinc-btn-archive flex items-center justify-center gap-1"
+          aria-label="Unarchive inbox {account.address}"
+          onclick={(e) => { e.stopPropagation(); onUnarchiveAccount(); }}
         >
-          <IconArchive class="w-3.5 h-3.5 text-warning" />
-        </button>
-        {#if supportsCustomEmail()}
-          <button
-            class="btn btn-ghost btn-xs btn-square rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-            aria-label="Edit inbox {account.address}"
-            onclick={(e) => { e.stopPropagation(); onEditAccount(account); }}
-          >
-            <IconEditSquare class="w-3.5 h-3.5 text-base-content/50" />
-          </button>
-        {:else}
-          <div></div>
-        {/if}
-      </div>
-    </div>
-
-    <!-- Expanded view: 1x4 labeled row (on hover of icon grid) -->
-    <div class={`grid grid-cols-4 gap-0 pt-1 animate-in fade-in slide-in-from-top-2 duration-300 ${hoveredAccountId === account.id ? '' : 'hidden'}`} onmouseenter={() => hoveredAccountId = account.id} onmouseleave={() => hoveredAccountId = null} role="toolbar" tabindex="0">
-      <button
-        class="flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg hover:bg-error/10 transition-all duration-150 group/btn focus:outline-none focus:ring-2 focus:ring-primary/20"
-        aria-label="Delete inbox {account.address}"
-        onclick={(e) => { e.stopPropagation(); onRemoveAccount(account.address); }}
-      >
-        <IconTrash class="w-4 h-4 text-base-content/50 group-hover/btn:text-error group-hover/btn:scale-110 transition-all duration-150" />
-        <span class="text-[10px] text-base-content/50 group-hover/btn:text-error transition-colors duration-150">Delete</span>
-      </button>
-      <div></div>
-      <button
-        class="flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg hover:bg-warning/10 transition-all duration-150 group/btn focus:outline-none focus:ring-2 focus:ring-primary/20"
-        aria-label="Archive inbox {account.address}"
-        onclick={(e) => { e.stopPropagation(); onArchiveAccount(account); }}
-      >
-        <IconArchive class="w-4 h-4 text-base-content/50 group-hover/btn:text-warning group-hover/btn:scale-110 transition-all duration-150" />
-        <span class="text-[10px] text-base-content/50 group-hover/btn:text-warning transition-colors duration-150">Archive</span>
-      </button>
-      {#if supportsCustomEmail()}
-        <button
-          class="flex flex-col items-center gap-1 py-1.5 px-1 rounded-lg hover:bg-base-300 transition-all duration-150 group/btn focus:outline-none focus:ring-2 focus:ring-primary/20"
-          aria-label="Edit inbox {account.address}"
-          onclick={(e) => { e.stopPropagation(); onEditAccount(account); }}
-        >
-          <IconEditSquare class="w-4 h-4 text-base-content/50 group-hover/btn:text-base-content group-hover/btn:scale-110 transition-all duration-150" />
-          <span class="text-[10px] text-base-content/50 group-hover/btn:text-base-content transition-colors duration-150">Edit</span>
+          <IconArchive class="w-3 h-3" />
+          <span>Unarchive</span>
         </button>
       {:else}
-        <div></div>
+        <button
+          class="text-[10px] px-2 py-1 rounded-full zinc-btn-archive flex items-center justify-center gap-1"
+          aria-label="Archive inbox {account.address}"
+          onclick={(e) => { e.stopPropagation(); onArchiveAccount(); }}
+        >
+          <IconArchive class="w-3 h-3" />
+          <span>Archive</span>
+        </button>
       {/if}
     </div>
-  {/if}
+  </div>
 </div>

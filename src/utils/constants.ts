@@ -4,7 +4,7 @@
  */
 
 // Debug mode - set to false for production
-export const DEBUG = true;
+export const DEBUG = false;
 
 // Email check intervals (in milliseconds)
 export const EMAIL_CHECK_INTERVAL_MS = 10 * 1000; // 10 seconds

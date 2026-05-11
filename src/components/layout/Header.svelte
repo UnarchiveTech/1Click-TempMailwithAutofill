@@ -16,8 +16,8 @@ let { themeMode = 'auto', onThemeChange = () => {} } = $props<{
     <div class="absolute right-0 flex items-center gap-1.5">
       <ThemeToggle {themeMode} {onThemeChange} />
       <button
-        class="tooltip tooltip-bottom tooltip-start w-7 h-7 flex items-center justify-center rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-300 transition-all duration-200 active:scale-95"
-        data-tip="Full Page"
+        class="w-7 h-7 flex items-center justify-center rounded-lg text-md-on-surface/50 hover:text-md-on-surface hover:bg-md-outline-variant transition-all duration-200 active:scale-95"
+        title="Full Page"
         aria-label="Expand view"
         onclick={() => browser.tabs.create({ url: '/app.html' })}
       >

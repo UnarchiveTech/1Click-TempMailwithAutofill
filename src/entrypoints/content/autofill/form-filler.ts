@@ -65,7 +65,15 @@ export function fillSelectElement(selectElement: HTMLSelectElement): void {
 
 export async function fillSignupForm(
   form: HTMLFormElement,
-  updateAndCopyCredentials: (creds: Record<string, string>) => Promise<void>
+  updateAndCopyCredentials: (creds: Record<string, string>) => Promise<void>,
+  identity?: {
+    firstNames?: string;
+    lastNames?: string;
+    useRandomPassword?: boolean;
+    customPassword?: string;
+    phone?: string;
+    pin?: string;
+  }
 ): Promise<boolean> {
   try {
     const { activeInboxId, inboxes = [] } = (await browser.storage.local.get([
@@ -75,7 +83,30 @@ export async function fillSignupForm(
     const inbox = inboxes.find((i: { id: string; address: string }) => i.id === activeInboxId);
     if (!inbox) throw new NoActiveInboxError({ activeInboxId });
 
-    const names = await getNamesToFill();
+    let names: FilledNames;
+    if (identity?.firstNames && identity?.lastNames) {
+      // Parse comma-separated names and select randomly
+      const firstNameList = identity.firstNames
+        .split(',')
+        .map((n) => n.trim())
+        .filter((n) => n);
+      const lastNameList = identity.lastNames
+        .split(',')
+        .map((n) => n.trim())
+        .filter((n) => n);
+
+      const firstName = firstNameList[Math.floor(Math.random() * firstNameList.length)];
+      const lastName = lastNameList[Math.floor(Math.random() * lastNameList.length)];
+
+      names = {
+        firstName,
+        lastName,
+        fullName: `${firstName} ${lastName}`,
+      };
+    } else {
+      names = await getNamesToFill();
+    }
+
     const { fullName, firstName, lastName } = names;
 
     const emailInput = form.querySelector<HTMLInputElement>(
@@ -102,9 +133,15 @@ export async function fillSignupForm(
     );
 
     const emailAddress = inbox.address;
-    const password = await getPasswordToFill();
+    let password: string;
+    if (identity?.useRandomPassword === false && identity?.customPassword) {
+      password = identity.customPassword;
+    } else {
+      password = await getPasswordToFill();
+    }
+
     const randomUsername = usernameInput ? generateUsername() : null;
-    const randomPhone = phoneInput ? generatePhoneNumber() : null;
+    const randomPhone = identity?.phone || (phoneInput ? generatePhoneNumber() : null);
 
     let randomWebsite: string | null = null;
     if (websiteInput) {

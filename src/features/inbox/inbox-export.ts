@@ -34,16 +34,16 @@ export function showExportFormatDialog(): Promise<string | null> {
     const dialog = document.createElement('div');
     dialog.className = 'fixed inset-0 flex items-center justify-center bg-black/50 z-50';
     dialog.innerHTML = `
-        <div class="card bg-base-100 shadow-xl w-96">
-          <div class="card-body">
-            <h3 class="card-title text-lg">Select Export Format</h3>
+        <div class="bg-md-primary-container rounded-2xl shadow-2xl p-5 flex flex-col gap-4 w-96">
+          <div>
+            <h3 class="font-bold text-base mb-1 text-md-on-surface">Select Export Format</h3>
             <div class="flex flex-col gap-2 mt-4">
-              <button class="btn btn-outline format-btn" data-format="json">JSON Format</button>
-              <button class="btn btn-outline format-btn" data-format="eml">EML Format</button>
-              <button class="btn btn-outline format-btn" data-format="mbox">MBOX Format</button>
+              <button class="px-3 py-2 text-sm rounded-xl border border-md-outline-variant bg-transparent text-md-on-surface hover:bg-md-secondary-container transition-colors format-btn" data-format="json">JSON Format</button>
+              <button class="px-3 py-2 text-sm rounded-xl border border-md-outline-variant bg-transparent text-md-on-surface hover:bg-md-secondary-container transition-colors format-btn" data-format="eml">EML Format</button>
+              <button class="px-3 py-2 text-sm rounded-xl border border-md-outline-variant bg-transparent text-md-on-surface hover:bg-md-secondary-container transition-colors format-btn" data-format="mbox">MBOX Format</button>
             </div>
-            <div class="card-actions justify-end mt-4">
-              <button class="btn btn-ghost cancel-btn">Cancel</button>
+            <div class="flex gap-2 pt-4 justify-end mt-2">
+              <button class="px-4 py-2 text-sm rounded-xl bg-transparent text-md-on-surface/80 hover:bg-md-surface-variant transition-colors cancel-btn">Cancel</button>
             </div>
           </div>
         </div>
@@ -191,9 +191,9 @@ export async function exportMultipleEMLAsZip(
   baseFilename: string
 ) {
   try {
-    // Import JSZip dynamically
-    const JSZip = (await import('jszip')).default;
-    const zip = new JSZip();
+    // Import fflate dynamically
+    const { zipSync, strToU8 } = await import('fflate');
+    const files: Record<string, Uint8Array> = {};
     let fileIndex = 1;
 
     messages.forEach((message) => {
@@ -203,12 +203,13 @@ export async function exportMultipleEMLAsZip(
         .substring(0, 50);
       const sanitizedAddress = account.address.replace(/[^a-zA-Z0-9]/g, '_');
       const filename = `${fileIndex.toString().padStart(3, '0')}_${sanitizedAddress}_${subject}.eml`;
-      zip.file(filename, emlContent);
+      files[filename] = strToU8(emlContent);
       fileIndex++;
     });
 
-    const zipBlob = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(zipBlob);
+    const zipped = zipSync({ files });
+    const blob = new Blob([zipped as unknown as BlobPart], { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `${baseFilename}_emails.zip`;
@@ -216,7 +217,7 @@ export async function exportMultipleEMLAsZip(
     URL.revokeObjectURL(url);
   } catch (e) {
     console.error('Error creating ZIP file:', e);
-    // Fallback to text format if JSZip fails
+    // Fallback to text format if fflate fails
     let archiveContent = '# EML Archive - Multiple Email Export\n';
     archiveContent += `# Generated on: ${new Date().toISOString()}\n`;
     archiveContent += '# Note: ZIP creation failed, using text format\n\n';

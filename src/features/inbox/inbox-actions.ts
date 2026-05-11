@@ -1,7 +1,7 @@
 import type { browser } from 'wxt/browser';
-import { DEFAULT_PROVIDER } from '@/services/email-service.js';
+import { DEFAULT_PROVIDER } from '@/utils/email-service.js';
 import { ApiError } from '@/utils/errors.js';
-import { logError } from '@/utils/logger.js';
+import { logDebug, logError } from '@/utils/logger.js';
 import { formatDate, formatTimeLeft, getEmailStatus, timeAgo } from '@/utils/time.js';
 import type { Account, Email, NotificationSettings } from '@/utils/types.js';
 
@@ -69,12 +69,14 @@ export async function loadInboxes(
       sidToken: inbox.sidToken,
       token: inbox.token,
       tag: inbox.tag || '',
+      tagColor: inbox.tagColor,
       archived: inbox.archived || false,
+      deleted: inbox.deleted || false,
       createdAt: inbox.createdAt,
     }));
 
     setters.setAllInboxes(allInboxes);
-    setters.setAccounts(allInboxes.filter((inbox: Account) => !inbox.archived));
+    setters.setAccounts(allInboxes.filter((inbox: Account) => !inbox.archived && !inbox.deleted));
 
     if (!skipEmailSelection) {
       const activeById = allInboxes.find((a) => a.id === activeId);
@@ -105,6 +107,9 @@ export async function checkMessages(
     });
     if (response?.success) {
       const msgs = response.messages || [];
+      const { readEmails = {} } = (await ext.storage.local.get(['readEmails'])) as {
+        readEmails?: Record<string, boolean>;
+      };
       const emails = msgs.map((m: Email) => ({
         id: m.id,
         from:
@@ -119,7 +124,7 @@ export async function checkMessages(
         otp: m.otp || null,
         body: m.body_plain || (m.body_html || '').replace(/<[^>]*>/g, ''),
         body_html: m.body_html,
-        unread: true,
+        unread: !readEmails[m.id],
         received_at: m.received_at,
       }));
       // Force a new array reference to trigger Svelte reactivity
@@ -128,16 +133,13 @@ export async function checkMessages(
       const latestOtpMsg = msgs
         .filter((m: Email) => m.otp)
         .sort((a: Email, b: Email) => b.received_at - a.received_at)[0];
-      console.log('[inbox-actions] latestOtpMsg:', latestOtpMsg);
+      logDebug(`[inbox-actions] latestOtpMsg: ${JSON.stringify(latestOtpMsg)}`);
       if (latestOtpMsg) {
         setters.setLatestOtp(latestOtpMsg.otp);
         setters.setLatestOtpSender(latestOtpMsg.from || '');
         setters.setLatestOtpSenderName(latestOtpMsg.from_name || '');
-        console.log(
-          '[inbox-actions] Set OTP - from:',
-          latestOtpMsg.from,
-          'from_name:',
-          latestOtpMsg.from_name
+        logDebug(
+          `[inbox-actions] Set OTP - from: ${latestOtpMsg.from}, from_name: ${latestOtpMsg.from_name}`
         );
         setters.setOtpContext(
           [
@@ -189,11 +191,17 @@ export async function createInbox(
   ext: typeof browser,
   setters: InboxSetters,
   provider?: string,
-  instanceId?: string
+  instanceId?: string,
+  emailUser?: string
 ) {
   setters.setLoading(true);
   try {
-    const response = await ext.runtime.sendMessage({ type: 'createInbox', provider, instanceId });
+    const response = await ext.runtime.sendMessage({
+      type: 'createInbox',
+      provider,
+      instanceId,
+      emailUser,
+    });
     if (response?.success) {
       const newInbox = response.inbox;
       setters.setEmails([]);

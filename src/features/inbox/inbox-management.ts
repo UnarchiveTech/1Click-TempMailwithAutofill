@@ -1,4 +1,6 @@
-import { EmailService, loadProviderConfig } from '@/services/email-service.js';
+import type { ToastType } from '@/components/feedback/Toast.svelte';
+import { EmailService, loadProviderConfig } from '@/utils/email-service.js';
+import { detectIconFromMessage } from '@/utils/iconMapping.js';
 import { logError } from '@/utils/logger.js';
 import type { Account, Email } from '@/utils/types.js';
 
@@ -16,16 +18,18 @@ export interface ManagementSetters {
     toast:
       | {
           message: string;
-          type?: 'success' | 'error' | 'warning';
-          icon?: 'success' | 'error' | 'warning' | 'expired' | 'archived' | 'deleted' | 'info';
+          type?: ToastType;
+          icon?: ToastType;
         }
       | string,
-    type?: 'success' | 'error' | 'warning'
+    type?: ToastType
   ) => void;
   loadInboxes: () => Promise<void>;
   setDropdownOpen: (open: boolean) => void;
   setEditingAccount: (account: Account | null) => void;
   setEditEmailDialogOpen: (open: boolean) => void;
+  setArchivedSectionOpen?: (open: boolean) => Promise<void>;
+  showOnboarding?: () => void;
 }
 
 export async function toggleAutoExtend(ext: Browser, account: Account, setters: ManagementSetters) {
@@ -37,13 +41,15 @@ export async function toggleAutoExtend(ext: Browser, account: Account, setters: 
     );
     await ext.storage.local.set({ inboxes: updated });
     await setters.loadInboxes();
+    const iconType = detectIconFromMessage(
+      `Auto-extend ${!account.autoExtend ? 'enabled' : 'disabled'} for ${account.address}`
+    );
     setters.setShowToast({
       message: `Auto-extend ${!account.autoExtend ? 'enabled' : 'disabled'} for ${account.address}`,
-      type: 'success',
-      icon: 'success',
+      type: iconType,
     });
   } catch (_e) {
-    setters.setShowToast({ message: 'Failed to toggle auto-extend', type: 'error', icon: 'error' });
+    setters.setShowToast({ message: 'Failed to toggle auto-extend', type: 'error' });
   }
 }
 
@@ -56,28 +62,101 @@ export async function removeAccount(
 ) {
   const acct = accounts.find((a) => a.address === address);
   if (!acct) return;
+
+  // Capture pre-deletion state from the active accounts list (no archived)
+  const activeAccountsBefore = accounts.filter((a: Account) => !a.archived && !a.deleted);
+  const currentIndex = activeAccountsBefore.findIndex((a) => a.address === address);
+  const wasSelected = state.selectedEmail === address;
+
   try {
-    await ext.runtime.sendMessage({ type: 'deleteInbox', inboxId: acct.id });
-    if (state.selectedEmail === address) {
-      setters.setSelectedEmail('');
-      setters.setEmails([]);
+    // Soft delete: mark as deleted instead of removing from storage
+    const { inboxes = [] } = (await ext.storage.local.get(['inboxes'])) as { inboxes?: Account[] };
+    const inboxIndex = inboxes.findIndex((i: Account) => i.id === acct.id);
+
+    if (inboxIndex !== -1) {
+      inboxes[inboxIndex] = { ...inboxes[inboxIndex], deleted: true };
+      await ext.storage.local.set({ inboxes });
     }
-    setters.setDropdownOpen(false);
+
     await setters.loadInboxes();
-    setters.setShowToast({
-      message: `Address ${address} deleted`,
-      type: 'success',
-      icon: 'deleted',
-    });
-  } catch (_e) {
-    setters.setShowToast({ message: 'Failed to delete address', type: 'error', icon: 'error' });
+
+    // Handle navigation after deletion
+    if (wasSelected) {
+      const updatedInboxes = (await (await ext.storage.local.get(['inboxes']))?.inboxes) || [];
+      const activeAccountsAfter = updatedInboxes.filter((a: Account) => !a.archived && !a.deleted);
+      const archivedAccounts = updatedInboxes.filter((a: Account) => a.archived);
+      const deletedAccounts = updatedInboxes.filter((a: Account) => a.deleted);
+
+      if (activeAccountsAfter.length > 0) {
+        // Still have active accounts - navigate to next, or previous if at end
+        // currentIndex is position in pre-deletion list; post-deletion the same slot
+        // is now occupied by the next item (or previous if it was the last)
+        const nextCandidate =
+          activeAccountsAfter[currentIndex] ?? activeAccountsAfter[currentIndex - 1];
+        setters.setSelectedEmail(nextCandidate.address);
+        setters.setEmails([]);
+        setters.setDropdownOpen(false);
+      } else if (archivedAccounts.length > 0 && setters.setArchivedSectionOpen) {
+        // No active accounts left but have archived - open dropdown with archived section
+        setters.setSelectedEmail('');
+        setters.setEmails([]);
+        await setters.setArchivedSectionOpen(true);
+      } else if (deletedAccounts.length > 0) {
+        // No active or archived accounts but have deleted - just clear selection
+        setters.setSelectedEmail('');
+        setters.setEmails([]);
+        setters.setDropdownOpen(false);
+      } else if (setters.showOnboarding) {
+        // No accounts at all - show onboarding
+        setters.setSelectedEmail('');
+        setters.setEmails([]);
+        setters.setDropdownOpen(false);
+        setters.showOnboarding();
+      } else {
+        setters.setSelectedEmail('');
+        setters.setEmails([]);
+        setters.setDropdownOpen(false);
+      }
+    } else {
+      setters.setDropdownOpen(false);
+    }
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    setters.setShowToast({ message: `Failed to delete inbox: ${msg}`, type: 'error' });
   }
 }
 
-export async function archiveAccount(ext: Browser, account: Account, setters: ManagementSetters) {
+export async function archiveAccount(
+  ext: Browser,
+  account: Account,
+  _accounts: Account[],
+  state: ManagementState,
+  setters: ManagementSetters
+) {
   try {
+    const wasSelected = state.selectedEmail === account.address;
     await ext.runtime.sendMessage({ type: 'archiveInbox', inboxId: account.id });
     await setters.loadInboxes();
+
+    // If the archived account was selected, navigate to next active account
+    if (wasSelected) {
+      const updatedInboxes = (await (await ext.storage.local.get(['inboxes']))?.inboxes) || [];
+      const activeAccounts = updatedInboxes.filter((a: Account) => !a.archived);
+
+      if (activeAccounts.length > 0) {
+        // Select the next active account
+        setters.setSelectedEmail(activeAccounts[0].address);
+      } else {
+        // No active accounts left - clear selection
+        setters.setSelectedEmail('');
+      }
+    }
+
+    // Open dropdown with archived section to show the archived account
+    if (setters.setArchivedSectionOpen) {
+      await setters.setArchivedSectionOpen(true);
+    }
+
     setters.setShowToast({
       message: `Address ${account.address} archived`,
       type: 'success',
@@ -85,7 +164,7 @@ export async function archiveAccount(ext: Browser, account: Account, setters: Ma
     });
   } catch (e) {
     logError('archiveAccount error:', e);
-    setters.setShowToast({ message: 'Failed to archive', type: 'error', icon: 'error' });
+    setters.setShowToast({ message: 'Failed to archive', type: 'error' });
   }
 }
 
@@ -93,14 +172,14 @@ export async function unarchiveAccount(ext: Browser, account: Account, setters: 
   try {
     await ext.runtime.sendMessage({ type: 'unarchiveInbox', inboxId: account.id });
     await setters.loadInboxes();
+    const iconType = detectIconFromMessage(`Address ${account.address} unarchived`);
     setters.setShowToast({
       message: `Address ${account.address} unarchived`,
-      type: 'success',
-      icon: 'success',
+      type: iconType,
     });
   } catch (e) {
     logError('unarchiveAccount error:', e);
-    setters.setShowToast({ message: 'Failed to unarchive', type: 'error', icon: 'error' });
+    setters.setShowToast({ message: 'Failed to unarchive', type: 'error' });
   }
 }
 
@@ -137,7 +216,8 @@ export async function extendAccount(ext: Browser, account: Account, setters: Man
 
     if (result.success) {
       await setters.loadInboxes();
-      setters.setShowToast('Email expiry extended successfully', 'success');
+      const iconType = detectIconFromMessage('Email expiry extended successfully');
+      setters.setShowToast('Email expiry extended successfully', iconType);
     } else {
       setters.setShowToast('Failed to extend email expiry', 'error');
     }
@@ -176,7 +256,8 @@ export async function editAccount(ext: Browser, account: Account, setters: Manag
 
     if (result.success) {
       await setters.loadInboxes();
-      setters.setShowToast('Email address edited successfully', 'success');
+      const iconType = detectIconFromMessage('Email address edited successfully');
+      setters.setShowToast('Email address edited successfully', iconType);
     } else {
       setters.setShowToast('Failed to edit email address', 'error');
     }
@@ -237,7 +318,8 @@ export async function handleSaveEmailUsername(
 
       // Reload inboxes
       await setters.loadInboxes();
-      setters.setShowToast('Email address updated successfully');
+      const iconType = detectIconFromMessage('Email address updated successfully');
+      setters.setShowToast('Email address updated successfully', iconType);
       closeEditEmailDialog(setters);
     } else {
       setters.setShowToast('Failed to update email address', 'error');

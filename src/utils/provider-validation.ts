@@ -2,7 +2,7 @@
  * Provider configuration validation utilities
  */
 
-import type { ProviderConfig } from '../services/email-service.js';
+import type { ProviderConfig } from './email-service.js';
 
 /**
  * Validate a provider configuration against the JSON schema

@@ -27,5 +27,5 @@
     "types": ["chrome"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", ".output"]
+  "exclude": ["node_modules", ".output", "**/*.test.ts", "**/*.spec.ts", "e2e"]
 }

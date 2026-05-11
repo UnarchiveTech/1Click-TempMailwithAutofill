@@ -1,4 +1,5 @@
-import type { ProviderConfig, ProviderInstance } from '@/utils/types.js';
+import type { ProviderInstance } from '@/utils/types.js';
+import type { ProviderConfig } from './email-service.js';
 
 export interface PingResult {
   id: string;
@@ -65,8 +66,8 @@ export async function pingProviderInstances(
   // If provider has no instances, ping the provider URL directly
   if (!instances || instances.length === 0) {
     if (provider.apiUrl) {
-      const ping = await getPing(provider.apiUrl, provider.type);
-      results.set(provider.type, ping);
+      const ping = await getPing(provider.apiUrl, provider.id);
+      results.set(provider.id, ping);
     }
     return results;
   }
@@ -115,8 +116,8 @@ export function formatPing(ping: number | 'timeout'): string {
  * Get ping color class based on latency
  */
 export function getPingColorClass(ping: number | 'timeout'): string {
-  if (ping === 'timeout') return 'text-error';
-  if (ping < 100) return 'text-success';
-  if (ping < 300) return 'text-warning';
-  return 'text-error';
+  if (ping === 'timeout') return 'text-md-error';
+  if (ping < 100) return 'text-md-success';
+  if (ping < 300) return 'text-md-warning';
+  return 'text-md-error';
 }

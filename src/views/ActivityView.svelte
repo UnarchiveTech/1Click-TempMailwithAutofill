@@ -70,6 +70,8 @@ function getEventIcon(type: ActivityEvent['type']) {
       return IconBarChart;
     case 'auto_fill':
       return IconClock;
+    case 'toast_notification':
+      return IconBell;
     default:
       return IconMail;
   }
@@ -89,6 +91,8 @@ function getEventTitle(type: ActivityEvent['type'], data: ActivityEvent['data'])
       return `Account deleted: ${data.inboxAddress}`;
     case 'auto_fill':
       return `Auto-filled OTP for ${data.website}`;
+    case 'toast_notification':
+      return data.message || 'Notification';
     default:
       return 'Unknown event';
   }
@@ -108,6 +112,8 @@ function getEventSubtitle(type: ActivityEvent['type'], data: ActivityEvent['data
       return data.inboxAddress;
     case 'auto_fill':
       return data.website;
+    case 'toast_notification':
+      return data.toastType || 'info';
     default:
       return '';
   }
@@ -125,49 +131,49 @@ function formatTime(timestamp: number) {
 </script>
 
 {#if loading}
-  <div class="flex-1 overflow-y-auto px-4 py-4 space-y-4" style="scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent;">
+  <div class="flex-1 overflow-y-auto px-4 py-4 space-y-4" style="scrollbar-width: thin; scrollbar-color: var(--md-primary) transparent;">
     {#each [1,2,3,4] as _}
-      <div class="rounded-xl bg-base-100 p-4 space-y-2 animate-pulse">
-        <div class="h-3 w-24 bg-base-300 rounded"></div>
-        <div class="h-8 w-32 bg-base-300 rounded"></div>
+      <div class="rounded-xl bg-md-primary-container p-4 space-y-2 animate-pulse">
+        <div class="h-3 w-24 bg-md-secondary-container rounded"></div>
+        <div class="h-8 w-32 bg-md-secondary-container rounded"></div>
       </div>
     {/each}
   </div>
 {:else}
-<div class="flex-1 overflow-y-auto px-4 py-4 space-y-5 pb-20" style="scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent;">
+<div class="flex-1 overflow-y-auto px-4 py-4 space-y-5 pb-20" style="scrollbar-width: thin; scrollbar-color: var(--md-primary) transparent;">
 
   <!-- Page heading -->
   <div class="pt-1">
-    <h1 class="text-lg font-bold text-base-content">Activity</h1>
-    <p class="text-xs text-base-content/50 mt-0.5">Your extension usage and timeline.</p>
+    <h1 class="text-lg font-bold text-md-on-surface">Activity</h1>
+    <p class="text-xs text-md-on-surface/50 mt-0.5">Your extension usage and timeline.</p>
   </div>
 
   <!-- ── Summary Stats Cards ── -->
   <section class="space-y-2">
     <div class="flex items-center gap-2 mb-1">
-      <IconBarChart class="w-4 h-4 text-primary" />
-      <span class="text-sm font-semibold text-base-content">Summary</span>
+      <IconBarChart class="w-4 h-4 text-md-primary" />
+      <span class="text-sm font-semibold text-md-on-surface">Summary</span>
     </div>
 
     <div class="grid grid-cols-2 gap-2">
-      <div class="bg-base-100 rounded-xl px-3 py-3 flex flex-col items-center justify-center">
-        <div class="text-2xl font-bold text-primary">{analytics.accountsCreated}</div>
-        <div class="text-xs text-base-content/50">Inboxes</div>
+      <div class="bg-md-tertiary-container rounded-xl px-3 py-3 flex flex-col items-center justify-center">
+        <div class="text-2xl font-bold text-md-primary">{analytics.accountsCreated}</div>
+        <div class="text-xs text-md-on-surface/50">Inboxes</div>
       </div>
 
-      <div class="bg-base-100 rounded-xl px-3 py-3 flex flex-col items-center justify-center">
-        <div class="text-2xl font-bold text-secondary">{analytics.emailsReceived}</div>
-        <div class="text-xs text-base-content/50">Emails</div>
+      <div class="bg-md-tertiary-container rounded-xl px-3 py-3 flex flex-col items-center justify-center">
+        <div class="text-2xl font-bold text-md-secondary">{analytics.emailsReceived}</div>
+        <div class="text-xs text-md-on-surface/50">Emails</div>
       </div>
 
-      <div class="bg-base-100 rounded-xl px-3 py-3 flex flex-col items-center justify-center">
-        <div class="text-2xl font-bold text-accent">{analytics.otpsDetected}</div>
-        <div class="text-xs text-base-content/50">OTPs</div>
+      <div class="bg-md-tertiary-container rounded-xl px-3 py-3 flex flex-col items-center justify-center">
+        <div class="text-2xl font-bold text-md-tertiary">{analytics.otpsDetected}</div>
+        <div class="text-xs text-md-on-surface/50">OTPs</div>
       </div>
 
-      <div class="bg-base-100 rounded-xl px-3 py-3 flex flex-col items-center justify-center">
-        <div class="text-2xl font-bold text-info">{analytics.notificationsSent}</div>
-        <div class="text-xs text-base-content/50">Notifications</div>
+      <div class="bg-md-tertiary-container rounded-xl px-3 py-3 flex flex-col items-center justify-center">
+        <div class="text-2xl font-bold text-md-primary">{analytics.notificationsSent}</div>
+        <div class="text-xs text-md-on-surface/50">Notifications</div>
       </div>
     </div>
   </section>
@@ -175,107 +181,141 @@ function formatTime(timestamp: number) {
   <!-- ── Activity Timeline ── -->
   <section class="space-y-2">
     <div class="flex items-center gap-2 mb-1">
-      <IconClock class="w-4 h-4 text-primary" />
-      <span class="text-sm font-semibold text-base-content">Recent Activity</span>
+      <IconClock class="w-4 h-4 text-md-primary" />
+      <span class="text-sm font-semibold text-md-on-surface">Recent Activity</span>
     </div>
 
     {#if loadingEvents}
       <div class="space-y-2">
         {#each [1,2,3] as _}
-          <div class="rounded-xl bg-base-100 p-4 space-y-2 animate-pulse">
-            <div class="h-3 w-24 bg-base-300 rounded"></div>
-            <div class="h-4 w-32 bg-base-300 rounded"></div>
+          <div class="rounded-xl bg-md-primary-container p-4 space-y-2 animate-pulse">
+            <div class="h-3 w-24 bg-md-secondary-container rounded"></div>
+            <div class="h-4 w-32 bg-md-secondacy-dont-oteriner rounded"></div>
           </div>
         {/each}
       </div>
     {:else if activityEvents.length === 0}
-      <div class="bg-base-100 rounded-xl px-4 py-6 text-center">
-        <div class="text-sm text-base-content/50">No activity yet</div>
+      <div class="bg-md-primary-container rounded-xl px-4 py-6 text-center">
+        <div class="text-sm text-md-on-surface/50">No activity yet</div>
       </div>
     {:else}
       <div class="space-y-2">
         {#each activityEvents as event}
           {#if event.type === 'email_received'}
-            <div class="bg-base-100 rounded-xl px-4 py-3 flex items-start gap-3">
+            <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-start gap-3">
               <div class="mt-0.5">
-                <IconMail class="w-4 h-4 text-primary" />
+                <IconMail class="w-4 h-4 text-md-primary" />
               </div>
               <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-base-content truncate">
+                <div class="text-sm font-medium text-md-on-surface truncate">
                   {getEventTitle(event.type, event.data)}
                 </div>
-                <div class="text-xs text-base-content/50 truncate">
+                <div class="text-xs text-md-on-surface/50 truncate">
                   {getEventSubtitle(event.type, event.data)}
                 </div>
-                <div class="text-[10px] text-base-content/40 mt-1">
+                <div class="text-[10px] text-md-on-surface/40 mt-1">
                   {formatTime(event.timestamp)}
                 </div>
               </div>
             </div>
           {:else if event.type === 'otp_detected'}
-            <div class="bg-base-100 rounded-xl px-4 py-3 flex items-start gap-3">
+            <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-start gap-3">
               <div class="mt-0.5">
-                <IconEnvelope class="w-4 h-4 text-primary" />
+                <IconEnvelope class="w-4 h-4 text-md-primary" />
               </div>
               <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-base-content truncate">
+                <div class="text-sm font-medium text-md-on-surface truncate">
                   {getEventTitle(event.type, event.data)}
                 </div>
-                <div class="text-xs text-base-content/50 truncate">
+                <div class="text-xs text-md-on-surface/50 truncate">
                   {getEventSubtitle(event.type, event.data)}
                 </div>
-                <div class="text-[10px] text-base-content/40 mt-1">
+                <div class="text-[10px] text-md-on-surface/40 mt-1">
                   {formatTime(event.timestamp)}
                 </div>
               </div>
             </div>
           {:else if event.type === 'notification_sent'}
-            <div class="bg-base-100 rounded-xl px-4 py-3 flex items-start gap-3">
+            <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-start gap-3">
               <div class="mt-0.5">
-                <IconBell class="w-4 h-4 text-primary" />
+                <IconBell class="w-4 h-4 text-md-primary" />
               </div>
               <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-base-content truncate">
+                <div class="text-sm font-medium text-md-on-surface truncate">
                   {getEventTitle(event.type, event.data)}
                 </div>
-                <div class="text-xs text-base-content/50 truncate">
+                <div class="text-xs text-md-on-surface/50 truncate">
                   {getEventSubtitle(event.type, event.data)}
                 </div>
-                <div class="text-[10px] text-base-content/40 mt-1">
+                <div class="text-[10px] text-md-on-surface/40 mt-1">
                   {formatTime(event.timestamp)}
                 </div>
               </div>
             </div>
           {:else if event.type === 'account_created'}
-            <div class="bg-base-100 rounded-xl px-4 py-3 flex items-start gap-3">
+            <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-start gap-3">
               <div class="mt-0.5">
-                <IconBarChart class="w-4 h-4 text-primary" />
+                <IconBarChart class="w-4 h-4 text-md-primary" />
               </div>
               <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-base-content truncate">
+                <div class="text-sm font-medium text-md-on-surface truncate">
                   {getEventTitle(event.type, event.data)}
                 </div>
-                <div class="text-xs text-base-content/50 truncate">
+                <div class="text-xs text-md-on-surface/50 truncate">
                   {getEventSubtitle(event.type, event.data)}
                 </div>
-                <div class="text-[10px] text-base-content/40 mt-1">
+                <div class="text-[10px] text-md-on-surface/40 mt-1">
+                  {formatTime(event.timestamp)}
+                </div>
+              </div>
+            </div>
+          {:else if event.type === 'account_deleted'}
+            <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-start gap-3">
+              <div class="mt-0.5">
+                <IconBarChart class="w-4 h-4 text-md-primary" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium text-md-on-surface truncate">
+                  {getEventTitle(event.type, event.data)}
+                </div>
+                <div class="text-xs text-md-on-surface/50 truncate">
+                  {getEventSubtitle(event.type, event.data)}
+                </div>
+                <div class="text-[10px] text-md-on-surface/40 mt-1">
+                  {formatTime(event.timestamp)}
+                </div>
+              </div>
+            </div>
+          {:else if event.type === 'toast_notification'}
+            <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-start gap-3">
+              <div class="mt-0.5">
+                <IconBell class="w-4 h-4 text-md-primary" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium text-md-on-surface truncate">
+                  {getEventTitle(event.type, event.data)}
+                </div>
+                <div class="text-xs text-md-on-surface/50 truncate">
+                  {getEventSubtitle(event.type, event.data)}
+                </div>
+                <div class="text-[10px] text-md-on-surface/40 mt-1">
                   {formatTime(event.timestamp)}
                 </div>
               </div>
             </div>
           {:else}
-            <div class="bg-base-100 rounded-xl px-4 py-3 flex items-start gap-3">
+            <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-start gap-3">
               <div class="mt-0.5">
-                <IconMail class="w-4 h-4 text-primary" />
+                <IconMail class="w-4 h-4 text-md-primary" />
               </div>
               <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-base-content truncate">
+                <div class="text-sm font-medium text-md-on-surface truncate">
                   {getEventTitle(event.type, event.data)}
                 </div>
-                <div class="text-xs text-base-content/50 truncate">
+                <div class="text-xs text-md-on-surface/50 truncate">
                   {getEventSubtitle(event.type, event.data)}
                 </div>
-                <div class="text-[10px] text-base-content/40 mt-1">
+                <div class="text-[10px] text-md-on-surface/40 mt-1">
                   {formatTime(event.timestamp)}
                 </div>
               </div>
@@ -288,14 +328,14 @@ function formatTime(timestamp: number) {
 
   <!-- ── Since Info ── -->
   {#if analytics.createdAt}
-    <div class="bg-base-100 rounded-xl px-4 py-3">
-      <div class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5">Tracking Since</div>
-      <div class="text-sm text-base-content">{new Date(analytics.createdAt).toLocaleDateString()}</div>
+    <div class="bg-md-primary-container rounded-xl px-4 py-3">
+      <div class="text-[10px] font-semibold text-md-on-surface/40 uppercase tracking-wider mb-1.5">Tracking Since</div>
+      <div class="text-sm text-md-on-surface">{new Date(analytics.createdAt).toLocaleDateString()}</div>
     </div>
   {/if}
 
   <!-- ── Refresh Button ── -->
-  <button class="w-full btn btn-outline rounded-xl h-12 text-sm font-semibold" onclick={() => { onLoadAnalytics(); loadActivityEvents(); }}>
+  <button class="w-full h-12 px-4 text-sm font-semibold rounded-xl border border-md-primary text-md-primary hover:bg-md-primary/10 transition-colors" onclick={() => { onLoadAnalytics(); loadActivityEvents(); }}>
     <IconRefresh class="w-4 h-4 mr-2" />
     Refresh
   </button>

@@ -3,9 +3,9 @@
  */
 
 import { browser } from 'wxt/browser';
-import { fetchEmails } from '@/services/dsl/email-fetcher.js';
-import { DEFAULT_PROVIDER, EmailService, loadProviderConfig } from '@/services/email-service.js';
 import { addActivityEvent } from '@/utils/activity-tracker.js';
+import { fetchEmails } from '@/utils/dsl/email-fetcher.js';
+import { DEFAULT_PROVIDER, EmailService, loadProviderConfig } from '@/utils/email-service.js';
 import {
   ApiError,
   InboxCreationError,
@@ -34,7 +34,7 @@ export interface DeleteInboxResult {
  * Creates a new email inbox using the specified provider
  * @param provider - Optional mail provider to use (defaults to selected provider in storage)
  * @param instanceId - Optional burner instance ID to use (only for burner provider)
- * @param _emailUser - Optional email username (currently unused)
+ * @param emailUser - Optional email username for custom address (only for Guerrilla Mail)
  * @returns Promise resolving to the created inbox account
  * @throws InboxCreationError if inbox creation fails
  * @throws ProviderUnsupportedError if the provider is not supported
@@ -43,7 +43,7 @@ export interface DeleteInboxResult {
 export async function createInbox(
   provider?: MailProvider,
   instanceId?: string,
-  _emailUser?: string
+  emailUser?: string
 ): Promise<Account> {
   const { selectedProvider = DEFAULT_PROVIDER } = (await browser.storage.local.get([
     'selectedProvider',
@@ -101,7 +101,27 @@ export async function createInbox(
 
     log('Create inbox result:', JSON.stringify(result));
 
-    const { address, id, token } = result;
+    let { address, id, token } = result;
+
+    // If custom username is provided and provider supports setEmailUser, use it
+    if (emailUser && config.operations?.setEmailUser) {
+      const domain = (address as string).split('@')[1];
+      const customAddress = `${emailUser}@${domain}`;
+      log(`Setting custom email address: ${customAddress}`);
+
+      const setEmailResult = await service.executeOperation('setEmailUser', {
+        auth: { token: token as string },
+        variables: { emailUser },
+      });
+
+      if (setEmailResult) {
+        address = setEmailResult.email_addr || customAddress;
+        id = setEmailResult.email_addr || customAddress;
+        token = setEmailResult.token || token;
+        log('Custom email address set successfully:', address);
+      }
+    }
+
     // For single-instance providers like guerrilla, id might not be in response
     // Use address as id if id is not present
     const inboxId = (id || address) as string;
@@ -365,14 +385,18 @@ export async function checkNewEmails(
     const storedEmails = await getStoredEmails(inbox.address);
     const mergedMessages = new Map<string, Email>();
 
-    // Add stored emails first
+    // Collect API email IDs for comparison
+    const apiEmailIds = new Set(apiMessages.map((e) => e.id));
+
+    // Add stored emails first, marking local-only ones
     for (const email of storedEmails) {
-      mergedMessages.set(email.id, email);
+      const isLocalOnly = !apiEmailIds.has(email.id);
+      mergedMessages.set(email.id, { ...email, local_only: isLocalOnly });
     }
 
-    // Add API emails, overwriting stored ones if same ID
+    // Add API emails, overwriting stored ones if same ID (they're not local-only)
     for (const email of apiMessages) {
-      mergedMessages.set(email.id, email);
+      mergedMessages.set(email.id, { ...email, local_only: false });
     }
 
     // Convert back to array and sort by received_at descending

@@ -1,7 +1,6 @@
 <script lang="ts">
 import { browser } from 'wxt/browser';
 import IconChevronDown from '@/components/icons/IconChevronDown.svelte';
-import IconEdit from '@/components/icons/IconEdit.svelte';
 import IconEnvelope from '@/components/icons/IconEnvelope.svelte';
 import IconFlame from '@/components/icons/IconFlame.svelte';
 import IconPlus from '@/components/icons/IconPlus.svelte';
@@ -12,7 +11,8 @@ import {
   DEFAULT_PROVIDER,
   loadAllProviderConfigs,
   loadProviderConfig,
-} from '@/services/email-service.js';
+  type ProviderConfig,
+} from '@/utils/email-service.js';
 import { getSelectedProviderInstance } from '@/utils/instance-manager.js';
 import type { Account } from '@/utils/types.js';
 import AccountCard from './AccountCard.svelte';
@@ -32,38 +32,57 @@ let {
   onArchiveAccount = () => {},
   onUnarchiveAccount = () => {},
   onRemoveAccount = () => {},
-}: {
+  onTagAccount = () => {},
+  dropdownOpen = false,
+  onDropdownOpenChange = () => {},
+  showToast = () => {},
+} = $props<{
   selectedEmail?: string;
   accounts?: Account[];
   allAccounts?: Account[];
-  onSelectAccount?: (email: string) => void;
+  onSelectAccount?: (address: string) => void;
   onEditAccount?: (account: Account) => void;
   onCreateInbox?: (provider?: string, instanceId?: string) => void;
   onNavigateToManage?: () => void;
   onReloadAccounts?: () => Promise<void>;
   onNavigateToSettings?: () => void;
-  onCreateInboxWithProvider?: (provider: string, instanceId?: string) => void;
+  onCreateInboxWithProvider?: (providerId: string) => void;
   onToggleAutoExtend?: (account: Account) => void;
   onArchiveAccount?: (account: Account) => void;
   onUnarchiveAccount?: (account: Account) => void;
   onRemoveAccount?: (address: string) => void;
-} = $props();
+  onTagAccount?: (account: Account) => void;
+  dropdownOpen?: boolean;
+  onDropdownOpenChange?: (open: boolean) => void;
+  showToast?: (message: string) => void;
+}>();
 
-// Dropdown state
-let dropdownOpen = $state(false);
+let openSection = $state<'live' | 'inactive'>('live');
+let inactiveTab = $state<'available' | 'unavailable'>('available');
+let availableCollapsed = $state(false);
+let unavailableCollapsed = $state(false);
+let selectedTagFilter = $state<string | null>(null);
 let dropdownSearch = $state('');
-let openSection = $state<'active' | 'archived' | 'expired' | null>('active');
-
-// Domain menu state (for provider selection)
+let tagDialogOpen = $state(false);
+let tagTargetAccount = $state<Account | null>(null);
+let draggedAccount = $state<Account | null>(null);
+let draggedFromSection = $state<'live' | 'inactive' | null>(null);
+let dropTargetAccount = $state<Account | null>(null);
+let localAccountOrder = $state<Account[] | null>(null);
 let domainMenuOpen = $state(false);
 let domainMenuPosition = $state({ x: 0, y: 0 });
 
-// Tag editing state
-let tagDialogOpen = $state(false);
-let tagTargetAccount = $state<Account | null>(null);
+function closeDropdown() {
+  dropdownSearch = '';
+  onDropdownOpenChange(false);
+}
+
+function handleKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Escape') closeDropdown();
+}
 
 // Load providers dynamically
-let allProviders = $derived.by(() => {
+let allProviders = $derived.by((): ProviderConfig[] => {
   try {
     return Object.values(loadAllProviderConfigs());
   } catch {
@@ -71,26 +90,114 @@ let allProviders = $derived.by(() => {
   }
 });
 
-function toggleSection(section: 'active' | 'archived' | 'expired') {
-  openSection = openSection === section ? null : section;
+function toggleSection(section: 'live' | 'inactive') {
+  openSection = section;
 }
 
 // Filter accounts by search (address or tag)
 let filteredAccounts = $derived.by(() => {
-  if (!dropdownSearch) return allAccounts;
+  const source = localAccountOrder ?? allAccounts;
+  if (!dropdownSearch) return source;
   const search = dropdownSearch.toLowerCase();
-  return allAccounts.filter(
+  return source.filter(
     (a: Account) =>
       a.address.toLowerCase().includes(search) || a.tag?.toLowerCase().includes(search)
   );
 });
 
-// Group accounts by status
-let accountsByStatus = $derived.by(() => {
-  const active = filteredAccounts.filter((a: Account) => a.status === 'active');
-  const archived = filteredAccounts.filter((a: Account) => a.status === 'archived');
-  const expired = filteredAccounts.filter((a: Account) => a.status === 'expired');
-  return { active, archived, expired };
+// Filter accounts by tag
+let tagFilteredAccounts = $derived.by(() => {
+  if (!selectedTagFilter) return filteredAccounts;
+  return filteredAccounts.filter((a: Account) => {
+    if (selectedTagFilter === 'archived') return a.status === 'archived';
+    if (selectedTagFilter === 'deleted') return a.status === 'deleted';
+    if (selectedTagFilter === 'expired') return a.status === 'expired';
+    return false;
+  });
+});
+
+// Copy email address to clipboard
+async function copyEmailToClipboard() {
+  try {
+    await navigator.clipboard.writeText(selectedEmail);
+  } catch (err) {
+    console.error('Failed to copy email:', err);
+  }
+}
+
+let clickTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function handleSingleClick() {
+  if (clickTimeout) {
+    clearTimeout(clickTimeout);
+    clickTimeout = null;
+  }
+  clickTimeout = setTimeout(() => {
+    onDropdownOpenChange(!dropdownOpen);
+    clickTimeout = null;
+  }, 250);
+}
+
+function handleDoubleClick() {
+  if (clickTimeout) {
+    clearTimeout(clickTimeout);
+    clickTimeout = null;
+  }
+  copyEmailToClipboard();
+  showToast('Email address copied');
+}
+
+// Helper to check if account can be recoverable
+function isRecoverable(account: Account): boolean {
+  const currentTime = Date.now();
+  const expiresAt = account.expiresAt || currentTime;
+  const isExpired = currentTime >= expiresAt;
+
+  // Not expired = recoverable
+  if (!isExpired) return true;
+  // Expired but has auto-renew = recoverable
+  if (account.autoExtend) return true;
+  // Expired, no auto-renew, but provider supports auto-renew = recoverable (so user can enable it)
+  try {
+    const config = loadProviderConfig(account.provider);
+    if (config.expiry?.renewable) return true;
+  } catch {
+    // If config fails to load, treat as not recoverable
+  }
+  // Otherwise unrecoverable
+  return false;
+}
+
+// Group accounts by new categorization (Live, Available, Unavailable)
+let accountsByCategory = $derived.by(() => {
+  const live: Account[] = [];
+  const available: Account[] = [];
+  const unavailable: Account[] = [];
+
+  tagFilteredAccounts.forEach((a: Account) => {
+    const currentTime = Date.now();
+    const expiresAt = a.expiresAt || currentTime;
+    const isExpired = currentTime >= expiresAt;
+
+    // Live: status is 'active' and not expired
+    if (a.status === 'active' && !isExpired) {
+      live.push(a);
+    } else {
+      // Inactive: everything else (archived, deleted, expired, or no status)
+      if (isRecoverable(a)) {
+        available.push(a);
+      } else {
+        unavailable.push(a);
+      }
+    }
+  });
+
+  // Don't sort - preserve storage order for drag-and-drop reordering
+  // live.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  // available.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  // unavailable.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+  return { live, available, unavailable };
 });
 
 // Reactive derived value for current account
@@ -149,6 +256,83 @@ function saveTag(tag: string, color: string) {
   updateTag(tagTargetAccount.id, tag, color);
   closeTagDialog();
 }
+
+// Drag and drop handlers
+function handleDragStart(e: DragEvent, account: Account) {
+  draggedAccount = account;
+  draggedFromSection = openSection;
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', account.id);
+  }
+}
+
+function handleDragEnd() {
+  draggedAccount = null;
+  draggedFromSection = null;
+  dropTargetAccount = null;
+}
+
+function handleDragOver(e: DragEvent, targetAccount: Account) {
+  e.preventDefault();
+  dropTargetAccount = targetAccount;
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = 'move';
+  }
+}
+
+async function handleDrop(e: DragEvent, targetAccount: Account, section: 'live' | 'inactive') {
+  e.preventDefault();
+  dropTargetAccount = null;
+  if (!draggedAccount || draggedAccount.id === targetAccount.id) return;
+
+  // Only allow reordering within the same section
+  if (draggedFromSection !== section) return;
+
+  const sourceDragged = draggedAccount;
+  handleDragEnd();
+
+  try {
+    const { inboxes = [] } = (await browser.storage.local.get(['inboxes'])) as {
+      inboxes?: Account[];
+    };
+    const inboxIndex = inboxes.findIndex((i: Account) => i.id === sourceDragged.id);
+    const targetIndex = inboxes.findIndex((i: Account) => i.id === targetAccount.id);
+
+    if (inboxIndex === -1 || targetIndex === -1) {
+      console.error(
+        'Drag-drop: could not find account IDs in storage',
+        sourceDragged.id,
+        targetAccount.id,
+        inboxes.map((i) => i.id)
+      );
+      return;
+    }
+
+    // Remove dragged account and insert at new position
+    const [movedAccount] = inboxes.splice(inboxIndex, 1);
+    inboxes.splice(targetIndex, 0, movedAccount);
+
+    // Optimistically reorder local display immediately
+    const currentSource = localAccountOrder ?? allAccounts;
+    const reordered = [...currentSource];
+    const localDragIdx = reordered.findIndex((a: Account) => a.id === sourceDragged.id);
+    const localTargetIdx = reordered.findIndex((a: Account) => a.id === targetAccount.id);
+    if (localDragIdx !== -1 && localTargetIdx !== -1) {
+      const [moved] = reordered.splice(localDragIdx, 1);
+      reordered.splice(localTargetIdx, 0, moved);
+      localAccountOrder = reordered;
+    }
+
+    await browser.storage.local.set({ inboxes });
+    await onReloadAccounts();
+    // Clear local override after parent state is updated
+    localAccountOrder = null;
+  } catch (error) {
+    console.error('Failed to reorder accounts:', error);
+    localAccountOrder = null;
+  }
+}
 </script>
 
 <div class="px-1">
@@ -156,18 +340,24 @@ function saveTag(tag: string, color: string) {
   <div class="relative mt-1 flex items-center gap-2">
     <!-- Floating status label above border -->
     {#if currentAccount}
-      <div class="absolute left-3" style="top: -10px; z-index: 10;">
+      <div class="absolute" style="top: -10px; left: 25px; z-index: 10;">
         <span
-          class="px-1.5 text-[11px] font-semibold leading-none {currentAccount?.status === 'active' ? 'text-success' : currentAccount?.status === 'expired' ? 'text-error' : 'text-base-content/50'} {currentAccount?.autoExtend ? 'bg-primary/10' : currentAccount?.status === 'expired' ? 'bg-error/10' : 'bg-base-100'}"
-        >{currentAccount.status === 'active' ? 'Active' : currentAccount.status === 'expired' ? 'Expired' : 'Archived'}</span>
+          class="px-1.5 text-[11px] font-semibold leading-none {currentAccount?.status === 'active' ? 'text-md-success' : currentAccount?.status === 'expired' ? 'text-md-error' : 'text-md-on-surface/50'} {currentAccount?.autoExtend ? 'bg-md-primary/10' : currentAccount?.status === 'expired' ? 'bg-md-error/10' : 'bg-md-tertiary-container'}"
+        >{currentAccount.status === 'active' ? 'Live' : currentAccount.status === 'expired' ? 'Expired' : 'Archived'}</span>
       </div>
     {/if}
     <div
-      class="flex items-center gap-0 px-1.5 py-2 rounded-xl border {currentAccount?.status === 'active' ? 'border-base-content/30' : currentAccount?.status === 'expired' ? 'border-error/30' : 'border-base-300'} {currentAccount?.autoExtend ? 'bg-primary/10' : currentAccount?.status === 'expired' ? 'bg-error/10' : 'bg-base-100'} flex-1 min-w-0 overflow-hidden"
+      class="flex items-center gap-0 px-1.5 py-2 rounded-xl border {currentAccount?.status === 'active' ? 'border-md-secondary-container/30' : currentAccount?.status === 'expired' ? 'border-md-error/30' : 'border-md-outline-variant'} {currentAccount?.autoExtend ? 'bg-md-primary/10' : currentAccount?.status === 'expired' ? 'bg-md-error/10' : 'bg-md-surface-container-low'} flex-1 min-w-0 overflow-hidden"
+      onclick={handleSingleClick}
+      ondblclick={handleDoubleClick}
+      onkeydown={(e) => { if (e.key === 'Enter') handleSingleClick(); }}
+      role="button"
+      tabindex="0"
+      aria-label="Copy email address"
     >
       <!-- Prev button -->
       <button
-        class="shrink-0 w-5 h-5 flex items-center justify-center rounded text-primary hover:text-primary/80 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+        class="shrink-0 w-5 h-5 flex items-center justify-center rounded text-md-primary hover:text-md-primary/80 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
         onclick={(e) => { e.stopPropagation(); goToPrev(); }}
         disabled={currentIndexInStatus <= 0}
         aria-label="Previous address"
@@ -175,35 +365,25 @@ function saveTag(tag: string, color: string) {
         <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
       </button>
 
-      <!-- Email text - clickable to open dropdown -->
+      <!-- Email text - clickable to open dropdown, double-click to copy -->
       <button
-        class="font-medium text-sm text-base-content truncate flex-1 min-w-0 text-left bg-transparent border-0 p-0 cursor-pointer"
-        onclick={() => dropdownOpen = !dropdownOpen}
+        class="font-medium text-sm text-md-on-surface truncate flex-1 min-w-0 text-left bg-transparent border-0 p-0 cursor-pointer"
+        onclick={handleSingleClick}
+        ondblclick={handleDoubleClick}
         aria-label="Select email address"
         title={selectedEmail}
       >
-        <span class="tooltip tooltip-bottom" data-tip={selectedEmail}>{selectedEmail}</span>
+        <span>{selectedEmail}</span>
       </button>
-
-      <!-- Edit button (Guerrilla Mail only) -->
-      {#if currentAccount?.provider === 'guerrilla'}
-        <button
-          class="p-1 hover:bg-base-200 rounded-full shrink-0 text-base-content/40 hover:text-base-content transition-colors"
-          onclick={(e) => { e.stopPropagation(); onEditAccount(currentAccount); }}
-          aria-label="Edit email address"
-        >
-          <IconEdit class="w-3.5 h-3.5" />
-        </button>
-      {/if}
 
       <!-- +N badge -->
       {#if accounts.length > 1}
-        <span class="text-xs font-semibold text-primary bg-primary/15 px-1.5 py-0.5 rounded-full shrink-0">+{accounts.length - 1}</span>
+        <span class="text-xs font-semibold text-md-primary bg-md-primary/15 px-1.5 py-0.5 rounded-full shrink-0">+{accounts.length - 1}</span>
       {/if}
 
       <!-- Next button -->
       <button
-        class="shrink-0 w-5 h-5 flex items-center justify-center rounded text-primary hover:text-primary/80 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+        class="shrink-0 w-5 h-5 flex items-center justify-center rounded text-md-primary hover:text-md-primary/80 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
         onclick={(e) => { e.stopPropagation(); goToNext(); }}
         disabled={currentIndexInStatus >= currentStatusAccounts.length - 1}
         aria-label="Next address"
@@ -212,12 +392,12 @@ function saveTag(tag: string, color: string) {
       </button>
 
       <!-- Separator -->
-      <span class="w-px h-4 bg-base-content/20 shrink-0"></span>
+      <span class="w-px h-4 bg-md-secondary-container/20 shrink-0"></span>
 
       <!-- Dropdown chevron -->
       <button
-        class="shrink-0 p-0.5 text-primary hover:text-primary/80 transition-colors"
-        onclick={() => dropdownOpen = !dropdownOpen}
+        class="shrink-0 p-0.5 text-md-primary hover:text-md-primary/80 transition-colors"
+        onclick={() => onDropdownOpenChange(!dropdownOpen)}
         aria-label="Open account list"
       >
         <IconChevronDown class="w-4 h-4" />
@@ -225,7 +405,7 @@ function saveTag(tag: string, color: string) {
     </div>
     <!-- Plus button - outside pill -->
     <button
-      class="btn btn-xs btn-square rounded-lg bg-primary hover:bg-primary/90 border-0 shrink-0"
+      class="w-6 h-6 flex items-center justify-center rounded-lg bg-md-primary hover:bg-md-primary/90 border-0 shrink-0 transition-colors"
       aria-label="Generate new address"
       onclick={async () => {
         const provider = currentAccount?.provider || DEFAULT_PROVIDER;
@@ -242,45 +422,45 @@ function saveTag(tag: string, color: string) {
         domainMenuOpen = true;
       }}
     >
-      <IconPlus class="w-4 h-4 text-primary-content" />
+      <IconPlus class="w-4 h-4 text-md-primary-content" />
     </button>
 
     <!-- Domain context menu -->
     {#if domainMenuOpen}
       <button class="fixed inset-0 z-40 bg-transparent cursor-default" aria-label="Close menu" onclick={() => domainMenuOpen = false}></button>
-      <div 
-        class="fixed z-50 bg-base-100 rounded-xl shadow-2xl border border-base-300 py-2 w-56 max-h-96 overflow-y-auto"
-        style="left: {domainMenuPosition.x}px; top: {domainMenuPosition.y}px;"
+      <div
+        class="fixed z-50 bg-md-surface rounded-xl shadow-2xl border border-md-outline-variant py-2 w-56 max-h-96 overflow-y-auto"
+        style="left: {domainMenuPosition.x}px; top: {domainMenuPosition.y}px; scrollbar-width: thin; scrollbar-color: var(--md-primary) transparent;"
       >
         {#each allProviders as provider}
           <div class="px-3 py-1.5">
-            <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wider">{provider.displayName}</p>
+            <p class="text-xs font-semibold text-md-on-surface/50 uppercase tracking-wider">{provider.displayName}</p>
           </div>
-          <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2" onclick={() => { onCreateInboxWithProvider(provider.id); domainMenuOpen = false; }}>
-            {#if (provider as any).ui?.icon === 'envelope'}
-              <IconEnvelope class="w-4 h-4 {(provider as any).ui?.color || 'text-primary'}" />
-            {:else if (provider as any).ui?.icon === 'flame'}
-              <IconFlame class="w-4 h-4 {(provider as any).ui?.color || 'text-primary'}" />
+          <button class="w-full px-4 py-2 text-left hover:bg-md-surface-variant text-sm flex items-center gap-2" onclick={() => { onCreateInboxWithProvider(provider.id); domainMenuOpen = false; }} aria-label="Create inbox with {provider.displayName}">
+            {#if provider.ui?.icon === 'envelope'}
+              <IconEnvelope class="w-4 h-4 {provider.ui?.color || 'text-md-primary'}" />
+            {:else if provider.ui?.icon === 'flame'}
+              <IconFlame class="w-4 h-4 {provider.ui?.color || 'text-md-primary'}" />
             {/if}
             {provider.displayName}
           </button>
           {#if provider.multiInstance?.enabled && provider.multiInstance.instances}
             {#each provider.multiInstance.instances as instance}
-              <button class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2 pl-8" onclick={() => { onCreateInboxWithProvider(provider.id, instance.id); domainMenuOpen = false; }}>
-                {#if (provider as any).ui?.icon === 'flame'}
-                  <IconFlame class="w-4 h-4 {(provider as any).ui?.color || 'text-primary'}" />
+              <button class="w-full px-4 py-2 text-left hover:bg-md-surface-variant text-sm flex items-center gap-2 pl-8" onclick={() => { onCreateInboxWithProvider(provider.id, instance.id); domainMenuOpen = false; }} aria-label="Create inbox with {provider.displayName} instance {instance.displayName || instance.name}">
+                {#if provider.ui?.icon === 'flame'}
+                  <IconFlame class="w-4 h-4 {provider.ui?.color || 'text-md-primary'}" />
                 {/if}
                 {instance.displayName || instance.name}
               </button>
             {/each}
           {/if}
           {#if provider !== allProviders[allProviders.length - 1]}
-            <div class="border-t border-base-200 my-1"></div>
+            <div class="border-t border-md-outline-variant my-1"></div>
           {/if}
         {/each}
-        <div class="border-t border-base-200 my-1"></div>
+        <div class="border-t border-md-outline-variant my-1"></div>
         <button 
-          class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2 text-base-content" 
+          class="w-full px-4 py-2 text-left hover:bg-md-surface-variant text-sm flex items-center gap-2 text-md-on-surface" 
           onclick={() => { 
             domainMenuOpen = false; 
             onNavigateToSettings();
@@ -292,7 +472,7 @@ function saveTag(tag: string, color: string) {
           Manage Instances
         </button>
         <button 
-          class="w-full px-4 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2 text-primary" 
+          class="w-full px-2 py-1 rounded border border-md-outline-variant text-xs bg-md-surface-container-low outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary" 
           onclick={() => { 
             domainMenuOpen = false; 
             onNavigateToSettings();
@@ -309,37 +489,39 @@ function saveTag(tag: string, color: string) {
       <button
         class="fixed inset-0 z-10 cursor-default bg-transparent border-0"
         aria-label="Close dropdown"
-        onclick={() => { dropdownOpen = false; dropdownSearch = ''; }}
+        onclick={closeDropdown}
       ></button>
 
       <!-- Dropdown panel -->
       <div class="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
         <!-- Blurred backdrop -->
-        <div class="absolute inset-0 bg-base-content/30 backdrop-blur-sm" role="button" tabindex="-1" onclick={() => { dropdownOpen = false; dropdownSearch = ''; }} onkeydown={(e) => { if (e.key === 'Escape') { dropdownOpen = false; dropdownSearch = ''; } }}></div>
+        <div class="absolute inset-0 bg-md-surface/30 backdrop-blur-sm" role="button" tabindex="-1" onclick={closeDropdown} onkeydown={handleKeyDown}></div>
 
-        <!-- Close button top-right -->
-        <button
-          class="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-base-200 hover:bg-base-300 flex items-center justify-center shadow-md transition-colors"
-          aria-label="Close dialog"
-          onclick={() => { dropdownOpen = false; dropdownSearch = ''; }}
-        >
-          <IconX class="w-4 h-4 text-base-content/70" />
-        </button>
+        <!-- Dialog wrapper: close button above, card below -->
+        <div class="relative z-10 flex flex-col items-end gap-2" style="width: 325px; height: 550px;">
+          <!-- Close button above dialog (outside card) -->
+          <button
+            class="w-9 h-9 rounded-full bg-md-surface hover:bg-md-surface-variant flex items-center justify-center shadow-md transition-colors flex-shrink-0"
+            aria-label="Close dialog"
+            onclick={closeDropdown}
+          >
+            <IconX class="w-4 h-4 text-md-on-surface/70" />
+          </button>
 
-        <!-- Dialog card -->
-        <div class="relative z-10 bg-base-100 rounded-xl shadow-2xl p-3 flex flex-col gap-2 w-80 h-[500px]">
+          <!-- Dialog card (separate from close button) -->
+          <div class="bg-md-surface rounded-xl shadow-2xl p-3 flex flex-col gap-2 w-full flex-1 overflow-hidden">
           <!-- Search bar -->
           <div class="relative">
             <input
               type="text"
               placeholder="Search addresses or tags..."
-              class="w-full bg-base-200 rounded-xl px-3 py-1.5 text-sm outline-none placeholder:text-base-content/40"
+              class="w-full bg-md-surface-container-low rounded-lg px-3 py-1.5 text-sm outline-none placeholder:text-md-on-surface/40"
               bind:value={dropdownSearch}
               aria-label="Search addresses"
             />
             {#if dropdownSearch}
               <button
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/40 hover:text-base-content/70"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-md-on-surface/40 hover:text-md-on-surface/70"
                 aria-label="Clear search"
                 onclick={() => dropdownSearch = ''}
               >
@@ -348,126 +530,213 @@ function saveTag(tag: string, color: string) {
             {/if}
           </div>
 
-          <!-- Generate New Mail Address button -->
-          <button
-            class="w-full px-3 py-2 text-left hover:bg-primary hover:text-primary-content text-sm flex items-center gap-2 text-base-content/60 rounded-lg transition-colors"
-            onclick={async () => {
-              dropdownOpen = false;
-              const provider = currentAccount?.provider || DEFAULT_PROVIDER;
-              const selectedInstance = await getSelectedProviderInstance(provider);
-              if (selectedInstance?.id && selectedInstance.id !== 'random') {
-                onCreateInbox(provider, selectedInstance.id);
-              } else {
-                onCreateInbox();
-              }
-            }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            Generate New Mail Address
-          </button>
-
           <div class="space-y-1 flex-1">
-            <!-- Active section -->
-            {#if true}
-              <div>
-                <button
-                  class="flex items-center gap-2 px-2 py-1 w-full text-left hover:bg-base-200 rounded-lg transition-colors"
-                  onclick={() => toggleSection('active')}
-                >
-                  <IconChevronDown class="w-3 h-3 transition-transform {openSection !== 'active' ? '-rotate-90' : ''}" />
-                  <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
-                  <span class="text-xs font-semibold text-success uppercase tracking-wider">Active</span>
-                  <span class="text-xs text-base-content/40 ml-auto">{accountsByStatus.active.length}</span>
-                </button>
-                {#if openSection === 'active'}
-                  <div class="space-y-1 mt-1 max-h-67 overflow-y-auto">
-                    {#each accountsByStatus.active as account}
-                      <AccountCard
-                        {account}
-                        {selectedEmail}
-                        onSelectAccount={(address) => { onSelectAccount(address); dropdownOpen = false; }}
-                        onToggleAutoExtend={onToggleAutoExtend}
-                        onArchiveAccount={onArchiveAccount}
-                        onUnarchiveAccount={onUnarchiveAccount}
-                        onEditAccount={onEditAccount}
-                        onRemoveAccount={onRemoveAccount}
-                        onTagAccount={openTagDialogForAccount}
-                      />
-                    {/each}
+            <!-- Live/Inactive tabs -->
+            <div class="flex gap-1 p-1 rounded-full bg-md-surface-variant">
+              <button
+                class="flex-none w-[100px] flex items-center justify-center gap-2 px-3 py-1 rounded-full transition-all duration-200 {openSection === 'live' ? 'bg-md-surface shadow-sm' : ''}"
+                onclick={() => toggleSection('live')}
+              >
+                <div class="flex flex-col items-start">
+                  <span class="text-[12px] font-bold {openSection === 'live' ? 'text-md-on-surface' : 'text-md-on-surface/40'}">Live</span>
+                  <span class="text-[9px] font-medium {openSection === 'live' ? 'text-md-on-surface/50' : 'text-md-on-surface/30'}">Active</span>
+                </div>
+                <span class="text-[11px] font-bold px-1.5 py-0.5 rounded-full {openSection === 'live' ? 'bg-md-primary text-md-on-primary' : 'bg-md-surface-variant/20 text-md-on-surface/50'}">{accountsByCategory.live.length}</span>
+              </button>
+              <button
+                class="flex-1 flex items-center justify-center gap-2 px-3 py-1 rounded-full transition-all duration-200 {openSection === 'inactive' ? 'bg-md-surface shadow-sm' : ''}"
+                onclick={() => toggleSection('inactive')}
+              >
+                <div class="flex flex-col items-start">
+                  <span class="text-[12px] font-bold {openSection === 'inactive' ? 'text-md-on-surface' : 'text-md-on-surface/40'}">Inactive</span>
+                  <span class="text-[9px] font-medium {openSection === 'inactive' ? 'text-md-on-surface/50' : 'text-md-on-surface/30'}">Archived, Deleted, Expired</span>
+                </div>
+                <span class="text-[11px] font-bold px-1.5 py-0.5 rounded-full {openSection === 'inactive' ? 'bg-md-surface-variant/30 text-md-on-surface' : 'bg-md-surface-variant/20 text-md-on-surface/50'}">{accountsByCategory.available.length + accountsByCategory.unavailable.length}</span>
+              </button>
+            </div>
+
+            <!-- Live tab content -->
+            {#if openSection === 'live'}
+              <div
+                class="space-y-1 mt-1 max-h-80 overflow-y-auto"
+                style="scrollbar-width: thin; scrollbar-color: var(--md-primary) transparent;"
+                role="list"
+              >
+                {#each accountsByCategory.live as account}
+                  <div
+                    ondrop={(e) => handleDrop(e, account, 'live')}
+                    ondragover={(e) => handleDragOver(e, account)}
+                    role="listitem"
+                  >
+                    <AccountCard
+                      {account}
+                      {selectedEmail}
+                      isInAvailable={false}
+                      isInUnavailable={false}
+                      draggable={true}
+                      onDragStart={handleDragStart}
+                      onDragEnd={handleDragEnd}
+                      onDrop={(e) => handleDrop(e, account, 'live')}
+                      isDragging={draggedAccount?.id === account.id}
+                      isDropTarget={dropTargetAccount?.id === account.id}
+                      onSelectAccount={(address) => { onSelectAccount(address); closeDropdown(); }}
+                      onToggleAutoExtend={onToggleAutoExtend}
+                      onArchiveAccount={onArchiveAccount}
+                      onUnarchiveAccount={onUnarchiveAccount}
+                      onEditAccount={onEditAccount}
+                      onRemoveAccount={onRemoveAccount}
+                      onTagAccount={openTagDialogForAccount}
+                    />
                   </div>
-                {/if}
+                {/each}
               </div>
             {/if}
 
-            <!-- Archived section -->
-            {#if true}
-              <div>
+            <!-- Inactive tab content -->
+            {#if openSection === 'inactive'}
+              <!-- Tag filter pills -->
+              <div class="flex gap-1 mt-1 px-2 flex-wrap">
                 <button
-                  class="flex items-center gap-2 px-2 py-1 w-full text-left hover:bg-base-200 rounded-lg transition-colors"
-                  onclick={() => toggleSection('archived')}
+                  class="text-[10px] px-2 py-0.5 rounded-full {selectedTagFilter === null ? 'bg-md-primary text-md-on-primary' : 'bg-md-surface-variant text-md-on-surface/60'} hover:bg-md-primary hover:text-md-on-primary transition-colors"
+                  onclick={() => selectedTagFilter = null}
                 >
-                  <IconChevronDown class="w-3 h-3 transition-transform {openSection !== 'archived' ? '-rotate-90' : ''}" />
-                  <span class="w-1.5 h-1.5 rounded-full bg-base-content/40"></span>
-                  <span class="text-xs font-semibold text-base-content/60 uppercase tracking-wider">Archived</span>
-                  <span class="text-xs text-base-content/40 ml-auto">{accountsByStatus.archived.length}</span>
+                  All
                 </button>
-                {#if openSection === 'archived'}
-                  <div class="space-y-1 mt-1 max-h-67 overflow-y-auto">
-                    {#each accountsByStatus.archived as account}
-                      <AccountCard
-                        {account}
-                        {selectedEmail}
-                        isArchived={true}
-                        onSelectAccount={(address) => { onSelectAccount(address); dropdownOpen = false; }}
-                        onArchiveAccount={onArchiveAccount}
-                        onUnarchiveAccount={onUnarchiveAccount}
-                        onRemoveAccount={onRemoveAccount}
-                      />
-                    {/each}
-                  </div>
-                {/if}
+                <button
+                  class="text-[10px] px-2 py-0.5 rounded-full {selectedTagFilter === 'archived' ? 'bg-md-primary text-md-on-primary' : 'bg-md-surface-variant text-md-on-surface/60'} hover:bg-md-primary hover:text-md-on-primary transition-colors"
+                  onclick={() => selectedTagFilter = selectedTagFilter === 'archived' ? null : 'archived'}
+                >
+                  Archived
+                </button>
+                <button
+                  class="text-[10px] px-2 py-0.5 rounded-full {selectedTagFilter === 'deleted' ? 'bg-md-primary text-md-on-primary' : 'bg-md-surface-variant text-md-on-surface/60'} hover:bg-md-primary hover:text-md-on-primary transition-colors"
+                  onclick={() => selectedTagFilter = selectedTagFilter === 'deleted' ? null : 'deleted'}
+                >
+                  Deleted
+                </button>
+                <button
+                  class="text-[10px] px-2 py-0.5 rounded-full {selectedTagFilter === 'expired' ? 'bg-md-primary text-md-on-primary' : 'bg-md-surface-variant text-md-on-surface/60'} hover:bg-md-primary hover:text-md-on-primary transition-colors"
+                  onclick={() => selectedTagFilter = selectedTagFilter === 'expired' ? null : 'expired'}
+                >
+                  Expired
+                </button>
               </div>
-            {/if}
 
-            <!-- Expired section -->
-            {#if true}
-              <div>
+              <!-- Available collapsible section -->
+              <div class="mt-2">
                 <button
-                  class="flex items-center gap-2 px-2 py-1 w-full text-left hover:bg-base-200 rounded-lg transition-colors"
-                  onclick={() => toggleSection('expired')}
+                  class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-md-surface-variant transition-colors"
+                  onclick={() => availableCollapsed = !availableCollapsed}
                 >
-                  <IconChevronDown class="w-3 h-3 transition-transform {openSection !== 'expired' ? '-rotate-90' : ''}" />
-                  <span class="w-1.5 h-1.5 rounded-full bg-error"></span>
-                  <span class="text-xs font-semibold text-error uppercase tracking-wider">Expired</span>
-                  <span class="text-xs text-base-content/40 ml-auto">{accountsByStatus.expired.length}</span>
+                  <span class="text-[11px] font-semibold text-md-on-surface">Available ({accountsByCategory.available.length})</span>
+                  <IconChevronDown class={`w-4 h-4 text-md-on-surface/50 transition-transform ${availableCollapsed ? 'rotate-180' : ''}`} />
                 </button>
-                {#if openSection === 'expired'}
-                  <div class="space-y-1 mt-1 max-h-67 overflow-y-auto">
-                    {#each accountsByStatus.expired as account}
-                      <AccountCard
-                        {account}
-                        {selectedEmail}
-                        onSelectAccount={(address) => { onSelectAccount(address); dropdownOpen = false; }}
-                        onRemoveAccount={onRemoveAccount}
-                      />
+                {#if !availableCollapsed && accountsByCategory.available.length > 0}
+                  <div class="mt-1 space-y-1 max-h-60 overflow-y-auto" style="scrollbar-width: thin; scrollbar-color: var(--md-primary) transparent;">
+                    {#each accountsByCategory.available as account}
+                      <div
+                        ondrop={(e) => handleDrop(e, account, 'inactive')}
+                        ondragover={(e) => handleDragOver(e, account)}
+                        role="listitem"
+                      >
+                        <AccountCard
+                          {account}
+                          {selectedEmail}
+                          isInAvailable={true}
+                          isInUnavailable={false}
+                          draggable={true}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                          onDrop={(e) => handleDrop(e, account, 'inactive')}
+                          isDragging={draggedAccount?.id === account.id}
+                          isDropTarget={dropTargetAccount?.id === account.id}
+                          onSelectAccount={(address) => { onSelectAccount(address); closeDropdown(); }}
+                          onToggleAutoExtend={onToggleAutoExtend}
+                          onArchiveAccount={onArchiveAccount}
+                          onUnarchiveAccount={onUnarchiveAccount}
+                          onRemoveAccount={onRemoveAccount}
+                          onTagAccount={openTagDialogForAccount}
+                        />
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Unavailable collapsible section -->
+              <div class="mt-2">
+                <button
+                  class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-md-surface-variant transition-colors"
+                  onclick={() => unavailableCollapsed = !unavailableCollapsed}
+                >
+                  <span class="text-[11px] font-semibold text-md-on-surface">Unavailable ({accountsByCategory.unavailable.length})</span>
+                  <IconChevronDown class={`w-4 h-4 text-md-on-surface/50 transition-transform ${unavailableCollapsed ? 'rotate-180' : ''}`} />
+                </button>
+                {#if !unavailableCollapsed && accountsByCategory.unavailable.length > 0}
+                  <div class="mt-1 space-y-1 max-h-60 overflow-y-auto" style="scrollbar-width: thin; scrollbar-color: var(--md-primary) transparent;">
+                    {#each accountsByCategory.unavailable as account}
+                      <div
+                        ondrop={(e) => handleDrop(e, account, 'inactive')}
+                        ondragover={(e) => handleDragOver(e, account)}
+                        role="listitem"
+                      >
+                        <AccountCard
+                          {account}
+                          {selectedEmail}
+                          isInAvailable={false}
+                          isInUnavailable={true}
+                          draggable={true}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                          onDrop={(e) => handleDrop(e, account, 'inactive')}
+                          isDragging={draggedAccount?.id === account.id}
+                          isDropTarget={dropTargetAccount?.id === account.id}
+                          onSelectAccount={(address) => { onSelectAccount(address); closeDropdown(); }}
+                          onToggleAutoExtend={onToggleAutoExtend}
+                          onArchiveAccount={onArchiveAccount}
+                          onUnarchiveAccount={onUnarchiveAccount}
+                          onRemoveAccount={onRemoveAccount}
+                          onTagAccount={openTagDialogForAccount}
+                        />
+                      </div>
                     {/each}
                   </div>
                 {/if}
               </div>
             {/if}
+            </div>
+
+            <!-- Generate New Mail Address button -->
+            <button
+              class="zinc-btn-qr w-full px-3 py-2 text-center text-sm flex items-center justify-center gap-2 rounded-lg transition-colors"
+              onclick={async () => {
+                closeDropdown();
+                const provider = currentAccount?.provider || DEFAULT_PROVIDER;
+                const selectedInstance = await getSelectedProviderInstance(provider);
+                if (selectedInstance?.id && selectedInstance.id !== 'random') {
+                  onCreateInbox(provider, selectedInstance.id);
+                } else {
+                  onCreateInbox();
+                }
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Create New Mail Address
+            </button>
+
+            <button
+              class="w-full px-3 py-2 text-center hover:bg-md-surface-variant text-sm flex items-center justify-center gap-2 text-md-on-surface/60 hover:text-md-on-surface rounded-lg transition-colors"
+              onclick={() => { closeDropdown(); onNavigateToManage(); }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 018.835-2.535m0 9.18a23.848 23.848 0 00-8.835 2.535M10.34 6.66a23.847 23.847 0 00-8.835-2.535" />
+              </svg>
+              Manage All Addresses
+            </button>
           </div>
-          <button
-            class="w-full px-3 py-2 text-left hover:bg-base-200 text-sm flex items-center gap-2 text-base-content/60 hover:text-base-content rounded-lg transition-colors"
-            onclick={() => { dropdownOpen = false; onNavigateToManage(); }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 018.835-2.535m0 9.18a23.848 23.848 0 00-8.835 2.535M10.34 6.66a23.847 23.847 0 00-8.835-2.535" />
-            </svg>
-            Manage All Addresses
-          </button>
-        </div>
+          </div>
       </div>
     {/if}
   </div>

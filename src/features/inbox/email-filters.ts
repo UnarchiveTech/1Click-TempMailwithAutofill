@@ -9,6 +9,7 @@ export interface EmailFilterOptions {
   searchQuery?: string;
   otpOnly?: boolean;
   senderDomain?: string;
+  selectedSenders?: string[];
   dateFrom?: string;
   dateTo?: string;
   sortBy?: string;
@@ -25,6 +26,7 @@ export function filterEmails(emails: Email[], options: EmailFilterOptions): Emai
     searchQuery = '',
     otpOnly = false,
     senderDomain = '',
+    selectedSenders = [],
     dateFrom = '',
     dateTo = '',
     sortBy = 'date',
@@ -45,6 +47,11 @@ export function filterEmails(emails: Email[], options: EmailFilterOptions): Emai
       const matchesDomain =
         !senderDomain || email.from?.toLowerCase().includes(senderDomain.toLowerCase());
 
+      // Selected senders filter (multi-select)
+      const matchesSelectedSenders =
+        selectedSenders.length === 0 ||
+        selectedSenders.some((s) => email.from?.toLowerCase().includes(s.toLowerCase()));
+
       // Date range filter
       let matchesDateRange = true;
       if (dateFrom) {
@@ -56,7 +63,9 @@ export function filterEmails(emails: Email[], options: EmailFilterOptions): Emai
         matchesDateRange = matchesDateRange && email.received_at <= toDate;
       }
 
-      return matchesSearch && matchesOtp && matchesDomain && matchesDateRange;
+      return (
+        matchesSearch && matchesOtp && matchesDomain && matchesSelectedSenders && matchesDateRange
+      );
     })
     .sort((a, b) => {
       // Sorting logic

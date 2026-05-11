@@ -4,11 +4,10 @@
  */
 
 import { browser } from 'wxt/browser';
-import { EmailService, loadProviderConfig } from '@/services/email-service.js';
 import { EXPIRY_WARNING_THRESHOLD_MS } from '@/utils/constants.js';
+import { EmailService, loadProviderConfig } from '@/utils/email-service.js';
 import { logError } from '@/utils/logger.js';
 import type { Account, NotificationSettings } from '@/utils/types.js';
-import { archiveInboxEmails } from './email-storage.js';
 
 export async function checkInboxExpiry(): Promise<void> {
   try {
@@ -30,8 +29,7 @@ export async function checkInboxExpiry(): Promise<void> {
         if (inbox.autoExtend) {
           const providerConfig = loadProviderConfig(inbox.provider);
           if (!providerConfig.expiry?.renewable) {
-            // Provider doesn't support renewal, skip to expiry handling
-            await archiveInboxEmails(inbox.address);
+            // Provider doesn't support renewal, mark as archived but keep emails in storage
             updatedInboxes[i] = { ...inbox, archived: true };
 
             if (notificationSettings?.enabled) {
@@ -39,7 +37,7 @@ export async function checkInboxExpiry(): Promise<void> {
                 type: 'basic',
                 iconUrl: 'icons/icon48.png',
                 title: 'Inbox Expired',
-                message: `The inbox ${inbox.address} has expired. Emails have been archived for future access.`,
+                message: `The inbox ${inbox.address} has expired. Emails are preserved locally.`,
                 priority: 1,
               });
             }
@@ -106,8 +104,7 @@ export async function checkInboxExpiry(): Promise<void> {
             }
           } catch (renewError: unknown) {
             console.error('Failed to auto-renew inbox:', inbox.address, renewError);
-            // Archive emails and mark inbox as archived
-            await archiveInboxEmails(inbox.address);
+            // Mark inbox as archived but keep emails in storage
             updatedInboxes[i] = { ...inbox, archived: true };
 
             if (notificationSettings?.enabled) {
@@ -115,14 +112,14 @@ export async function checkInboxExpiry(): Promise<void> {
                 type: 'basic',
                 iconUrl: 'icons/icon48.png',
                 title: 'Inbox Expired',
-                message: `The inbox ${inbox.address} has expired. Emails have been archived for future access.`,
+                message: `The inbox ${inbox.address} has expired. Emails are preserved locally.`,
                 priority: 1,
               });
             }
             continue;
           }
         } else {
-          await archiveInboxEmails(inbox.address);
+          // Mark inbox as archived but keep emails in storage
           updatedInboxes[i] = { ...inbox, archived: true };
 
           if (notificationSettings?.enabled) {
@@ -130,7 +127,7 @@ export async function checkInboxExpiry(): Promise<void> {
               type: 'basic',
               iconUrl: 'icons/icon48.png',
               title: 'Inbox Expired',
-              message: `The inbox ${inbox.address} has expired. Emails have been archived for future access.`,
+              message: `The inbox ${inbox.address} has expired. Emails are preserved locally.`,
               priority: 1,
             });
           }

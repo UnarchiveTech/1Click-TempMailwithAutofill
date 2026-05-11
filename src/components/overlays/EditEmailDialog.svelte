@@ -29,7 +29,7 @@ function handleSave() {
 {#if open}
   <div class="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
     <div
-      class="absolute inset-0 bg-base-content/30 backdrop-blur-sm"
+      class="absolute inset-0 bg-md-surface/30 backdrop-blur-sm"
       role="button"
       tabindex="-1"
       onclick={onClose}
@@ -37,30 +37,31 @@ function handleSave() {
     ></div>
 
     <button
-      class="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-base-200 hover:bg-base-300 flex items-center justify-center shadow-md transition-colors"
+      class="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-md-surface hover:bg-md-surface-variant flex items-center justify-center shadow-md transition-colors"
       aria-label="Close dialog"
       onclick={onClose}
     >
-      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-base-content/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-md-on-surface/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
       </svg>
     </button>
 
-    <div
-      class="relative z-10 bg-base-100 rounded-xl shadow-2xl p-5 flex flex-col gap-4 w-96"
-      tabindex="-1"
-    >
-      <div>
-        <h3 class="font-bold text-base mb-1">Edit Email Address</h3>
-        <p class="text-xs text-base-content/60">Change your username (domain will remain {domain})</p>
-      </div>
+    <div class="bg-md-surface rounded-xl px-4 py-2">
+      <div
+        class="relative z-10 bg-md-surface rounded-xl shadow-2xl p-5 flex flex-col gap-4 w-96"
+        tabindex="-1"
+      >
+        <div>
+          <h3 class="font-bold text-base mb-1">Edit Email Address</h3>
+          <p class="text-xs text-md-on-surface/60">Change your username (domain will remain {domain})</p>
 
+        </div>
       <!-- Input field -->
       <div class="flex flex-col gap-2">
         <div class="flex items-center gap-2">
           <input
             type="text"
-            class="input input-sm input-bordered flex-1 rounded-lg"
+            class="flex-1 px-2 py-1.5 text-sm rounded-lg border border-md-outline-variant bg-md-surface-container-low outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary"
             placeholder="Enter new username..."
             bind:value={usernameInput}
             onkeydown={(e) => {
@@ -68,22 +69,22 @@ function handleSave() {
               else if (e.key === 'Escape') onClose();
             }}
           />
-          <span class="text-xs text-base-content/50">@{domain}</span>
+          <span class="text-xs text-md-on-surface/50">@{domain}</span>
         </div>
-        <p class="text-xs text-base-content/40">Current: {currentUsername}@{domain}</p>
+        <p class="text-xs text-md-on-surface/40">Current: {currentUsername}@{domain}</p>
       </div>
 
       <!-- Action buttons -->
       <div class="flex gap-2 pt-2">
         <button
-          class="btn btn-sm flex-1 rounded-xl"
+          class="flex-1 px-3 py-1.5 text-sm rounded-xl bg-md-secondary text-md-on-secondary hover:bg-md-secondary/90 transition-colors"
           aria-label="Cancel"
           onclick={onClose}
         >
           Cancel
         </button>
         <button
-          class="btn btn-sm btn-primary flex-1 rounded-xl"
+          class="flex-1 px-3 py-1.5 text-sm rounded-xl bg-md-primary text-md-on-primary hover:bg-md-primary/90 transition-colors"
           aria-label="Save email address"
           onclick={handleSave}
           disabled={!usernameInput.trim() || usernameInput.trim() === currentUsername}
@@ -93,4 +94,5 @@ function handleSave() {
       </div>
     </div>
   </div>
+</div>
 {/if}

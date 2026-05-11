@@ -26,12 +26,13 @@ export function formatTimeLeft(ms: number): string {
   if (!ms || ms <= 0) return 'Expired';
   const hours = Math.floor(ms / 3600000);
   const minutes = Math.floor((ms % 3600000) / 60000);
-  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}:${minutes.toString().padStart(2, '0')}`;
   return `${minutes}m`;
 }
 
 export function getEmailStatus(inbox: Account): string {
   if (inbox.archived) return 'archived';
+  if (inbox.deleted) return 'deleted';
   if (Date.now() > (inbox.expiresAt || 0)) return 'expired';
   return 'active';
 }

@@ -1,13 +1,14 @@
 <script lang="ts">
 import DOMPurify from 'dompurify';
-import { onDestroy, onMount } from 'svelte';
+import { onDestroy, onMount, tick } from 'svelte';
 import { browser } from 'wxt/browser';
-import ToastNotification from '@/components/feedback/ToastNotification.svelte';
+import type { ToastType } from '@/components/feedback/Toast.svelte';
+import ToastContainer from '@/components/feedback/ToastContainer.svelte';
 import ErrorBoundary from '@/components/layout/ErrorBoundary.svelte';
 import Footer from '@/components/layout/Footer.svelte';
 import Header from '@/components/layout/Header.svelte';
 import ConfirmDialog from '@/components/overlays/ConfirmDialog.svelte';
-import EditEmailDialog from '@/components/overlays/EditEmailDialog.svelte';
+import CreateInboxDialog from '@/components/overlays/CreateInboxDialog.svelte';
 import QrDialog from '@/components/overlays/QrDialog.svelte';
 import ArchivedEmails from '@/components/ui/ArchivedEmails.svelte';
 import EmailDetail from '@/components/ui/mail/EmailDetail.svelte';
@@ -74,6 +75,7 @@ import {
   type LoginSetters,
   loadLoginInfo as loadLoginInfoAction,
 } from '@/features/login-info/login-actions.js';
+import { openMessageWindow } from '@/features/message-window/message-window-actions.js';
 import {
   closeQrDialog as closeQrDialogAction,
   copyQrImage as copyQrImageAction,
@@ -110,10 +112,15 @@ import {
   type ThemeSetters,
   toggleTheme as toggleThemeAction,
 } from '@/features/theme/theme-actions.js';
+import type { View } from '@/features/types/view-types.js';
+import { addToastNotification } from '@/utils/activity-tracker.js';
 import { decrypt, encrypt } from '@/utils/crypto.js';
 import { ApiError, ValidationError } from '@/utils/errors.js';
-import { logError } from '@/utils/logger.js';
+import { setupFocusTrap } from '@/utils/focusTrap.js';
+import { detectIconFromMessage } from '@/utils/iconMapping.js';
+import { logDebug, logError } from '@/utils/logger.js';
 import { formatDate, formatTimeLeft, getEmailStatus, timeAgo } from '@/utils/time.js';
+import { toastStore } from '@/utils/toastStore.js';
 import type {
   Account,
   Email,
@@ -122,37 +129,51 @@ import type {
   SavedSearchFilter,
 } from '@/utils/types.js';
 import { validateCustomInstanceName, validateCustomInstanceUrl } from '@/utils/validation.js';
-import AboutView from '@/views/AboutView.svelte';
 import ActivityView from '@/views/ActivityView.svelte';
-import ExtensionSettingsView from '@/views/ExtensionSettingsView.svelte';
+import IdentitiesView from '@/views/IdentitiesView.svelte';
 import InboxView from '@/views/InboxView.svelte';
 import MailManagementView from '@/views/MailManagementView.svelte';
 import SavedLoginInfoView from '@/views/SavedLoginInfoView.svelte';
 import packageJson from '../../../package.json';
+
+// Lazy-loaded non-critical views
+// biome-ignore lint/suspicious/noExplicitAny: Dynamic component loading requires any
+let AboutViewComponent = $state<null | any>(null);
+// biome-ignore lint/suspicious/noExplicitAny: Dynamic component loading requires any
+let ExtensionSettingsViewComponent = $state<null | any>(null);
+
+function loadAboutView() {
+  if (!AboutViewComponent) {
+    import('@/views/AboutView.svelte').then((mod) => {
+      AboutViewComponent = mod.default;
+    });
+  }
+}
+
+function loadSettingsView() {
+  if (!ExtensionSettingsViewComponent) {
+    import('@/views/ExtensionSettingsView.svelte').then((mod) => {
+      ExtensionSettingsViewComponent = mod.default;
+    });
+  }
+}
 
 // Cross-browser API (polyfill provides browser, chrome as fallback)
 const ext = browser;
 let version = $state<string>(packageJson.version);
 
 // --- View state ---
-type View =
-  | 'main'
-  | 'mailSettings'
-  | 'settings'
-  | 'analytics'
-  | 'loginInfo'
-  | 'archivedEmails'
-  | 'emailDetail'
-  | 'messageDetail'
-  | 'about';
 let currentView = $state<View>('main');
 
 // --- Main view ---
 let selectedEmail = $state<string>('');
 let dropdownOpen = $state<boolean>(false);
+let accountSelectorDropdownOpen = $state<boolean>(false);
+let archivedSectionOpen = $state<'active' | 'archived' | 'expired' | null>(null);
 let searchQuery = $state<string>('');
 let otpOnly = $state<boolean>(false);
 let senderDomain = $state<string>('');
+let selectedSenders = $state<string[]>([]);
 let dateFrom = $state<string>('');
 let dateTo = $state<string>('');
 let loading = $state<boolean>(false);
@@ -172,35 +193,49 @@ let menuOpen = $state<boolean>(false);
 let sortBy = $state<string>('date');
 
 // --- Toast notifications ---
-interface Toast {
-  message: string;
-  type: 'success' | 'error' | 'warning';
-  icon?: 'success' | 'error' | 'warning' | 'expired' | 'archived' | 'deleted' | 'info';
-  undoAction?: (() => void) | null;
+function getToastTypeFromMessage(message: string): ToastType {
+  return detectIconFromMessage(message);
 }
-let toast = $state<Toast | null>(null);
+
 function showToast(
   message:
     | string
     | {
         message: string;
-        type?: 'success' | 'error' | 'warning';
-        icon?: 'success' | 'error' | 'warning' | 'expired' | 'archived' | 'deleted' | 'info';
+        type?: ToastType;
+        icon?: ToastType;
       },
-  type: 'success' | 'error' | 'warning' = 'success',
+  type: ToastType = 'success',
   undoAction: (() => void) | null = null
 ) {
-  if (typeof message === 'string') {
-    toast = { message, type, undoAction };
-  } else {
-    toast = {
-      message: message.message,
-      type: message.type || type,
-      icon: message.icon,
-      undoAction,
-    };
+  const messageText = typeof message === 'string' ? message : message.message;
+
+  // Log to activity tab (except for mail-related messages)
+  const mailRelatedKeywords = ['email', 'otp', 'message', 'received', 'detected'];
+  const isMailRelated = mailRelatedKeywords.some((keyword) =>
+    messageText.toLowerCase().includes(keyword)
+  );
+
+  if (!isMailRelated) {
+    const toastType =
+      type === 'success' || type === 'error' || type === 'warning' || type === 'info'
+        ? type
+        : 'info';
+    addToastNotification(messageText, toastType);
   }
-  setTimeout(() => (toast = null), undoAction ? 5000 : 3000);
+
+  if (typeof message === 'string') {
+    const detectedType = getToastTypeFromMessage(message);
+    toastStore.add(detectedType, message, undoAction ? 5000 : 3000);
+  } else {
+    const finalType = message.icon || message.type || type;
+    const detectedType = getToastTypeFromMessage(message.message);
+    toastStore.add(
+      finalType === 'success' ? detectedType : finalType,
+      message.message,
+      undoAction ? 5000 : 3000
+    );
+  }
 }
 
 // --- Confirmation dialog ---
@@ -218,7 +253,7 @@ function showConfirm(message: string, onConfirm: () => void) {
   setTimeout(() => {
     if (confirmDialogRef) {
       confirmDialogRef.focus();
-      setupFocusTrap(confirmDialogRef);
+      focusTrapCleanup = setupFocusTrap(confirmDialogRef);
     }
   }, 50);
 }
@@ -231,32 +266,6 @@ function closeConfirm() {
     confirmPreviousFocus = null;
   }
 }
-function setupFocusTrap(element: HTMLElement) {
-  const focusableElements = element.querySelectorAll(
-    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-  );
-  const firstFocusable = focusableElements[0] as HTMLElement;
-  const lastFocusable = focusableElements[focusableElements.length - 1] as HTMLElement;
-
-  const trapFocus = (e: KeyboardEvent) => {
-    if (e.key === 'Tab') {
-      if (e.shiftKey) {
-        if (document.activeElement === firstFocusable) {
-          e.preventDefault();
-          lastFocusable?.focus();
-        }
-      } else {
-        if (document.activeElement === lastFocusable) {
-          e.preventDefault();
-          firstFocusable?.focus();
-        }
-      }
-    }
-  };
-
-  element.addEventListener('keydown', trapFocus);
-  focusTrapCleanup = () => element.removeEventListener('keydown', trapFocus);
-}
 
 // --- Filtered emails (reactive with memoization) ---
 const getFilteredEmails = useEmailFilter(
@@ -265,6 +274,7 @@ const getFilteredEmails = useEmailFilter(
     searchQuery,
     otpOnly,
     senderDomain,
+    selectedSenders,
     dateFrom,
     dateTo,
     sortBy,
@@ -314,6 +324,7 @@ const settingsSetters: SettingsSetters = {
 const themeSetters: ThemeSetters = {
   setThemeMode: (v) => (themeMode = v),
   setCustomColor: (v) => (customColor = v),
+  setContrastLevel: (v) => (contrastLevel = v),
 };
 
 const qrSetters: QRSetters = {
@@ -349,9 +360,17 @@ const managementSetters: ManagementSetters = {
   loadInboxes: async () => {
     await loadInboxes();
   },
-  setDropdownOpen: (open) => (dropdownOpen = open),
-  setEditingAccount: (account) => (editingAccount = account),
-  setEditEmailDialogOpen: (open) => (editEmailDialogOpen = open),
+  setDropdownOpen: (open) => (accountSelectorDropdownOpen = open),
+  setEditingAccount: () => {},
+  setEditEmailDialogOpen: () => {},
+  setArchivedSectionOpen: async (open) => {
+    archivedSectionOpen = open ? 'archived' : null;
+    accountSelectorDropdownOpen = open;
+  },
+  showOnboarding: () => {
+    // Navigate to main view (which shows onboarding when accounts.length === 0)
+    currentView = 'main';
+  },
 };
 
 const archivedSetters: ArchivedSetters = {
@@ -407,12 +426,6 @@ async function selectAccount(address: string) {
 
 function copyEmail() {
   copyEmailAction(selectedEmail, (message) => showToast(message));
-}
-
-async function createInbox(provider?: string, instanceId?: string) {
-  _skipEmailSelection = true;
-  await createInboxAction(ext, inboxSetters, provider, instanceId);
-  _skipEmailSelection = false;
 }
 
 async function refreshInbox(activeInboxId?: string) {
@@ -763,25 +776,26 @@ let qrCanvas = $state<HTMLCanvasElement | null>(null);
 let qrDialogElement = $state<HTMLElement | null>(null);
 let previousFocusElement = $state<HTMLElement | null>(null);
 
-// --- Edit Email dialog ---
-let editEmailDialogOpen = $state(false);
-let editingAccount = $state<Account | null>(null);
+// --- Create Inbox dialog ---
+let createInboxDialogOpen = $state(false);
 
-function openEditEmailDialog(account: Account) {
-  openEditEmailDialogAction(account, managementSetters);
+async function createInbox(provider?: string, instanceId?: string, emailUser?: string) {
+  _skipEmailSelection = true;
+  await createInboxAction(ext, inboxSetters, provider, instanceId, emailUser);
+  _skipEmailSelection = false;
 }
 
-function closeEditEmailDialog() {
-  closeEditEmailDialogAction(managementSetters);
+function openCreateInboxDialog() {
+  createInboxDialogOpen = true;
 }
 
-async function handleSaveEmailUsername(newUsername: string) {
-  await handleSaveEmailUsernameAction(ext, newUsername, editingAccount, managementSetters);
-}
-
-// --- Edit email address (Guerrilla only) ---
-async function editEmailAddress(account: Account) {
-  await editEmailAddressAction(account, managementSetters);
+async function handleCreateInbox(type: 'random' | 'custom', username?: string) {
+  createInboxDialogOpen = false;
+  if (type === 'random') {
+    await createInbox();
+  } else {
+    await createInbox(undefined, undefined, username);
+  }
 }
 
 async function openQrDialog() {
@@ -815,6 +829,22 @@ let selectedMessage = $state<Email | null>(null);
 function openMessageDetail(message: Email) {
   selectedMessage = message;
   currentView = 'messageDetail';
+
+  // Mark email as read
+  if (message.unread) {
+    message.unread = false;
+    // Save read state to storage
+    browser.storage.local.get(['readEmails']).then((result) => {
+      const readEmails = (result.readEmails as Record<string, boolean>) || {};
+      readEmails[message.id] = true;
+      browser.storage.local.set({ readEmails });
+    });
+    // Update emails array to reflect read state (trigger reactivity)
+    const emailIndex = emails.findIndex((e) => e.id === message.id);
+    if (emailIndex !== -1) {
+      emails = emails.map((e, i) => (i === emailIndex ? { ...e, unread: false } : e));
+    }
+  }
 }
 
 // --- Remove account (delete inbox) ---
@@ -830,7 +860,13 @@ async function removeAccount(address: string) {
 
 // --- Archive single account from row ---
 async function archiveAccount(account: Account) {
-  await archiveAccountAction(ext, account, managementSetters);
+  await archiveAccountAction(
+    ext,
+    account,
+    accounts,
+    { selectedEmail, emails, loading },
+    managementSetters
+  );
 }
 
 async function unarchiveAccount(account: Account) {
@@ -899,24 +935,38 @@ async function extendAccount(account: Account) {
 }
 
 // --- Theme management ---
-import type { ThemeMode } from '@/features/theme/theme-actions.js';
+import type { ContrastLevel, ThemeMode } from '@/features/theme/theme-actions.js';
 
 let themeMode = $state<ThemeMode>('system');
+let contrastLevel = $state<ContrastLevel>('standard');
 
 function _toggleTheme() {
-  toggleThemeAction({ themeMode, customColor }, themeSetters, ext);
+  toggleThemeAction({ themeMode, customColor, contrastLevel }, themeSetters, ext);
 }
 
 function setThemeMode(mode: ThemeMode) {
-  setThemeModeAction(mode, themeSetters, ext);
+  setThemeModeAction(mode, customColor, contrastLevel, themeSetters, ext);
 }
 
 function applyTheme() {
-  applyThemeAction(themeMode);
+  applyThemeAction(themeMode, contrastLevel);
+}
+
+function setContrastLevel(level: ContrastLevel) {
+  contrastLevel = level;
+  applyThemeAction(themeMode, contrastLevel);
+  if (customColor) {
+    applyCustomColor(customColor);
+  }
+  ext.storage.local.set({ contrastLevel: level });
 }
 
 // Listen for system theme changes
-listenForSystemThemeChanges(() => themeMode, applyTheme);
+listenForSystemThemeChanges(
+  () => themeMode,
+  () => contrastLevel,
+  applyTheme
+);
 
 // --- Restore archived email ---
 async function restoreArchivedInbox(email: Email) {
@@ -935,38 +985,9 @@ async function restoreArchivedInbox(email: Email) {
 }
 
 function _openMessageWindow(message: Email) {
-  // Opens message in a proper popup window like the reference
-  const width = 800,
-    height = 600;
-  const left = (screen.width - width) / 2;
-  const top = (screen.height - height) / 2;
-  const win = window.open(
-    '',
-    '_blank',
-    `popup=yes,width=${width},height=${height},left=${left},top=${top}`
-  );
-  if (!win) {
+  if (!openMessageWindow(message)) {
     openMessageDetail(message);
-    return;
   }
-
-  // Add lazy loading to images in HTML content
-  let bodyHtml = message.body_html || `<pre>${message.body || ''}</pre>`;
-  bodyHtml = bodyHtml.replace(/<img([^>]*)>/gi, (match, attrs) => {
-    // Add loading="lazy" if not already present
-    if (!attrs.includes('loading=')) {
-      return `<img${attrs} loading="lazy">`;
-    }
-    return match;
-  });
-
-  const body = DOMPurify.sanitize(bodyHtml);
-  const subject = DOMPurify.sanitize(message.subject || 'No Subject');
-  const from = DOMPurify.sanitize(message.from || 'Unknown');
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${subject}</title>
-    <style>body{font-family:system-ui;padding:24px;line-height:1.6}h1{font-size:18px}img{max-width:100%;height:auto}</style></head>
-    <body><h1>${subject}</h1><p><b>From:</b> ${from}</p><hr>${body}</body></html>`);
-  win.document.close();
 }
 
 // --- Saved search filters ---
@@ -981,7 +1002,7 @@ async function loadSavedSearchFilters() {
   }
 }
 
-async function saveCurrentFilter(name: string) {
+async function saveFilter(name: string) {
   try {
     const newFilter: SavedSearchFilter = {
       id: Date.now().toString(),
@@ -999,6 +1020,17 @@ async function saveCurrentFilter(name: string) {
   } catch (e) {
     console.error('Error saving filter:', e);
     showToast('Failed to save filter', 'error');
+  }
+}
+
+async function renameFilter(id: string, name: string) {
+  try {
+    savedSearchFilters = savedSearchFilters.map((f) => (f.id === id ? { ...f, name } : f));
+    await ext.storage.local.set({ savedSearchFilters });
+    showToast('Filter renamed');
+  } catch (e) {
+    console.error('Error renaming filter:', e);
+    showToast('Failed to rename filter', 'error');
   }
 }
 
@@ -1022,8 +1054,13 @@ async function deleteFilter(filterId: string) {
   }
 }
 
+let _lastAppliedColor = $state<string>('');
+
 $effect(() => {
-  applyCustomColor(customColor);
+  if (customColor && customColor !== _lastAppliedColor) {
+    applyCustomColor(customColor);
+    _lastAppliedColor = customColor;
+  }
 });
 
 // --- Initialize on mount ---
@@ -1037,8 +1074,12 @@ onMount(async () => {
     if (changes.storedEmails && selectedEmail) {
       // Read emails directly from storage instead of calling checkMessages
       try {
-        const { storedEmails = {} } = (await ext.storage.local.get(['storedEmails'])) as {
+        const { storedEmails = {}, readEmails = {} } = (await ext.storage.local.get([
+          'storedEmails',
+          'readEmails',
+        ])) as {
           storedEmails?: Record<string, Email[]>;
+          readEmails?: Record<string, boolean>;
         };
         const inboxEmails = storedEmails[selectedEmail] || [];
         const mappedEmails = inboxEmails.map((m: Email) => ({
@@ -1055,13 +1096,18 @@ onMount(async () => {
           otp: m.otp || null,
           body: m.body_plain || (m.body_html || '').replace(/<[^>]*>/g, ''),
           body_html: m.body_html,
-          unread: true,
+          unread: !readEmails[m.id],
           received_at: m.received_at,
         }));
         inboxSetters.setEmails([...mappedEmails]);
-        const latestOtpMsg = inboxEmails
-          .filter((m: Email) => m.otp)
-          .sort((a: Email, b: Email) => b.received_at - a.received_at)[0];
+        // Find latest OTP from ALL inboxes (global OTP)
+        const allOtps: Email[] = [];
+        Object.values(storedEmails).forEach((inboxEmails: Email[]) => {
+          inboxEmails.forEach((m: Email) => {
+            if (m.otp) allOtps.push(m);
+          });
+        });
+        const latestOtpMsg = allOtps.sort((a: Email, b: Email) => b.received_at - a.received_at)[0];
         if (latestOtpMsg?.otp) {
           inboxSetters.setLatestOtp(latestOtpMsg.otp);
           inboxSetters.setLatestOtpSender(latestOtpMsg.from || '');
@@ -1090,8 +1136,12 @@ onMount(async () => {
     pollTimeout = setTimeout(async () => {
       if (selectedEmail && !document.hidden) {
         try {
-          const { storedEmails = {} } = (await ext.storage.local.get(['storedEmails'])) as {
+          const { storedEmails = {}, readEmails = {} } = (await ext.storage.local.get([
+            'storedEmails',
+            'readEmails',
+          ])) as {
             storedEmails?: Record<string, Email[]>;
+            readEmails?: Record<string, boolean>;
           };
           const inboxEmails = storedEmails[selectedEmail] || [];
           const mappedEmails = inboxEmails.map((m: Email) => ({
@@ -1108,13 +1158,20 @@ onMount(async () => {
             otp: m.otp || null,
             body: m.body_plain || (m.body_html || '').replace(/<[^>]*>/g, ''),
             body_html: m.body_html,
-            unread: true,
+            unread: !readEmails[m.id],
             received_at: m.received_at,
           }));
           inboxSetters.setEmails([...mappedEmails]);
-          const latestOtpMsg = inboxEmails
-            .filter((m: Email) => m.otp)
-            .sort((a: Email, b: Email) => b.received_at - a.received_at)[0];
+          // Find latest OTP from ALL inboxes (global OTP)
+          const allOtps: Email[] = [];
+          Object.values(storedEmails).forEach((inboxEmails: Email[]) => {
+            inboxEmails.forEach((m: Email) => {
+              if (m.otp) allOtps.push(m);
+            });
+          });
+          const latestOtpMsg = allOtps.sort(
+            (a: Email, b: Email) => b.received_at - a.received_at
+          )[0];
           if (latestOtpMsg?.otp) {
             inboxSetters.setLatestOtp(latestOtpMsg.otp);
             inboxSetters.setLatestOtpSender(latestOtpMsg.from || '');
@@ -1148,13 +1205,23 @@ onMount(async () => {
   });
 
   // Restore theme settings
-  const themeData = (await ext.storage.local.get(['themeMode'])) as { themeMode?: string };
+  const themeData = (await ext.storage.local.get(['themeMode', 'contrastLevel'])) as {
+    themeMode?: string;
+    contrastLevel?: string;
+  };
   if (
     themeData.themeMode === 'light' ||
     themeData.themeMode === 'system' ||
     themeData.themeMode === 'dark'
   ) {
     themeMode = themeData.themeMode;
+  }
+  if (
+    themeData.contrastLevel === 'standard' ||
+    themeData.contrastLevel === 'medium' ||
+    themeData.contrastLevel === 'high'
+  ) {
+    contrastLevel = themeData.contrastLevel;
   }
   applyTheme();
   await loadInboxes();
@@ -1253,8 +1320,8 @@ onDestroy(() => {
 </script>
 
 <ErrorBoundary>
-  <div class="flex justify-center items-start min-h-screen bg-base-200">
-    <div class="card w-[375px] bg-base-100 shadow-xl flex flex-col transition-all duration-300 ease-in-out rounded-2xl" style="height: 600px; min-height: 600px; padding-left: 7.5px; padding-right: 7.5px;">
+  <div class="flex justify-center items-start min-h-screen bg-md-background">
+    <div class="w-[375px] bg-md-surface shadow-xl flex flex-col transition-all duration-300 ease-in-out rounded-2xl" style="height: 600px; min-height: 600px; padding-left: 7.5px; padding-right: 7.5px;">
       <!-- Header -->
       <Header
         themeMode={themeMode === 'system' ? 'auto' : themeMode}
@@ -1287,7 +1354,6 @@ onDestroy(() => {
     onUnarchiveAccount={unarchiveAccount}
     onExportAccountEmails={exportAccountEmails}
     onGenerateNewAddress={() => currentView = 'main'}
-    onEditAccount={editEmailAddress}
     onExtendAccount={extendAccount}
     />
 
@@ -1313,40 +1379,50 @@ onDestroy(() => {
     />
 
   {:else if currentView === 'settings'}
-    <ExtensionSettingsView context="sidepanel"
-      onBack={() => currentView = 'main'}
-      useCustomPassword={useCustomPassword}
-      customPassword={customPassword}
-      useCustomName={useCustomName}
-      customFirstName={customFirstName}
-      customLastName={customLastName}
-      autoCopy={autoCopy}
-      autoRenew={autoRenew}
-      selectedProvider={selectedProvider}
-      savingSettings={savingSettings}
-      loading={settingsLoading}
-      onSaveSettings={saveSettings}
-      onSetUseCustomPassword={(v) => useCustomPassword = v}
-      onSetCustomPassword={(v) => customPassword = v}
-      onSetUseCustomName={(v) => useCustomName = v}
-      onSetCustomFirstName={(v) => customFirstName = v}
-      onSetCustomLastName={(v) => customLastName = v}
-      onSetAutoCopy={(v) => autoCopy = v}
-      onSetAutoRenew={(v) => autoRenew = v}
-      onHardReset={hardReset}
-      providerInstances={providerInstances}
-      selectedProviderInstance={selectedProviderInstance}
-      onSetProviderInstance={setProviderInstance}
-      onLoadProviderInstances={loadProviderInstances}
-      onImportData={importData}
-      onProviderChange={handleProviderChange}
-      customColor={customColor}
-      onColorChange={handleColorChange}
-      showDeveloperSettings={showDeveloperSettings}
-      enableLogging={enableLogging}
-      onToggleDeveloperSettings={toggleDeveloperSettings}
-      onToggleEnableLogging={toggleEnableLogging}
-    />
+    {loadSettingsView()}
+    {#if ExtensionSettingsViewComponent}
+      {@const Settings = ExtensionSettingsViewComponent}
+      <Settings context="sidepanel"
+        onBack={() => currentView = 'main'}
+        useCustomPassword={useCustomPassword}
+        customPassword={customPassword}
+        useCustomName={useCustomName}
+        customFirstName={customFirstName}
+        customLastName={customLastName}
+        autoCopy={autoCopy}
+        autoRenew={autoRenew}
+        selectedProvider={selectedProvider}
+        savingSettings={savingSettings}
+        loading={settingsLoading}
+        onSaveSettings={saveSettings}
+        onSetUseCustomPassword={(v: boolean) => useCustomPassword = v}
+        onSetCustomPassword={(v: string) => customPassword = v}
+        onSetUseCustomName={(v: boolean) => useCustomName = v}
+        onSetCustomFirstName={(v: string) => customFirstName = v}
+        onSetCustomLastName={(v: string) => customLastName = v}
+        onSetAutoCopy={(v: boolean) => autoCopy = v}
+        onSetAutoRenew={(v: boolean) => autoRenew = v}
+        onHardReset={hardReset}
+        providerInstances={providerInstances}
+        selectedProviderInstance={selectedProviderInstance}
+        onSetProviderInstance={setProviderInstance}
+        onLoadProviderInstances={loadProviderInstances}
+        onImportData={importData}
+        onProviderChange={handleProviderChange}
+        customColor={customColor}
+        onColorChange={handleColorChange}
+        contrastLevel={contrastLevel}
+        onContrastLevelChange={(v: 'standard' | 'medium' | 'high') => contrastLevel = v}
+        showDeveloperSettings={showDeveloperSettings}
+        enableLogging={enableLogging}
+        onToggleDeveloperSettings={() => showDeveloperSettings = !showDeveloperSettings}
+        onToggleEnableLogging={() => enableLogging = !enableLogging}
+      />
+    {:else}
+      <div class="flex items-center justify-center h-full">
+        <div class="text-sm text-md-on-surface/50">Loading...</div>
+      </div>
+    {/if}
 
   {:else if currentView === 'analytics'}
     <ActivityView context="sidepanel"
@@ -1381,15 +1457,26 @@ onDestroy(() => {
     />
 
   {:else if currentView === 'about'}
-    <AboutView context="sidepanel" {version} />
+    {loadAboutView()}
+    {#if AboutViewComponent}
+      {@const About = AboutViewComponent}
+      <About context="sidepanel" {version} />
+    {:else}
+      <div class="flex items-center justify-center h-full">
+        <div class="text-sm text-md-on-surface/50">Loading...</div>
+      </div>
+    {/if}
 
-  {:else if accounts.length === 0 && !loadingInboxes}
+  {:else if currentView === 'identities'}
+    <IdentitiesView context="sidepanel" />
+
+  {:else if accounts.length === 0 && !loadingInboxes && allInboxes.length === 0}
     <Onboarding onCreateInbox={async (provider) => { await createInbox(provider); await loadSettings(); }} />
 
   {:else}
     <InboxView context="sidepanel"
       selectedEmail={selectedEmail}
-      dropdownOpen={dropdownOpen}
+      dropdownOpen={accountSelectorDropdownOpen}
       accounts={accounts}
       allAccounts={allInboxes}
       loading={loading}
@@ -1397,6 +1484,7 @@ onDestroy(() => {
       sortBy={sortBy}
       otpOnly={otpOnly}
       senderDomain={senderDomain}
+      selectedSenders={selectedSenders}
       dateFrom={dateFrom}
       dateTo={dateTo}
       notificationsEnabled={notificationsEnabled}
@@ -1408,11 +1496,13 @@ onDestroy(() => {
       otpContext={otpContext}
       formDetected={formDetected}
       savedSearchFilters={savedSearchFilters}
+      openSection={archivedSectionOpen}
+      onDropdownOpenChange={(open) => accountSelectorDropdownOpen = open}
       onSelectAccount={selectAccount}
       onCopyEmail={copyEmail}
       onOpenQrDialog={openQrDialog}
-      onCreateInbox={createInbox}
-      onCreateInboxWithProvider={createInbox}
+      onCreateInbox={openCreateInboxDialog}
+      showToast={(message) => showToast(message)}
       onAutofillForm={autofillForm}
       onRefreshInbox={refreshInbox}
       onToggleNotifications={toggleNotifications}
@@ -1420,21 +1510,27 @@ onDestroy(() => {
       onUnarchiveAccount={unarchiveAccount}
       onRemoveAccount={removeAccount}
       onReloadAccounts={loadInboxes}
-      onEditAccount={editEmailAddress}
       onToggleAutoExtend={toggleAutoExtend}
       onOpenMessageDetail={openMessageDetail}
       onOtpOnlyChange={(v) => otpOnly = v}
       onSenderDomainChange={(v) => senderDomain = v}
+      onSelectedSendersChange={(v) => selectedSenders = v}
       onDateFromChange={(v) => dateFrom = v}
       onDateToChange={(v) => dateTo = v}
-      onNavigateToSettings={() => currentView = 'settings'}
-      onNavigateToManage={() => currentView = 'mailSettings'}
+      onSaveFilter={saveFilter}
+      onLoadFilter={loadFilter}
+      onRenameFilter={renameFilter}
+      onDeleteFilter={deleteFilter}
+      onNavigateToSettings={() => { currentView = 'settings'; }}
+      onNavigateToManage={() => { currentView = 'mailSettings'; }}
       autoRenew={autoRenew}
       onToggleAutoRenew={async () => { autoRenew = !autoRenew; await saveAutoRenew(); }}
     />
   {/if}
 
         </div>
+        <!-- Toast Container positioned just above footer -->
+        <ToastContainer />
         <!-- Floating Island Nav: absolutely stuck to bottom of content area -->
         {#if accounts.length > 0 || loadingInboxes}
         <div class="absolute bottom-0 left-0 right-0 z-20 pointer-events-none">
@@ -1444,6 +1540,8 @@ onDestroy(() => {
         </div>
         {/if}
     </div>
+  </div>
+  </div>
 
   <QrDialog
     open={qrDialogOpen}
@@ -1455,12 +1553,10 @@ onDestroy(() => {
     onCopyImage={copyQrImage}
   />
 
-  <EditEmailDialog
-    open={editEmailDialogOpen}
-    currentUsername={editingAccount?.address.split('@')[0] || ''}
-    domain={editingAccount?.address.split('@')[1] || ''}
-    onClose={closeEditEmailDialog}
-    onSave={handleSaveEmailUsername}
+  <CreateInboxDialog
+    open={createInboxDialogOpen}
+    onClose={() => createInboxDialogOpen = false}
+    onCreate={handleCreateInbox}
   />
 
   <ConfirmDialog
@@ -1468,8 +1564,4 @@ onDestroy(() => {
     bind:confirmDialogRef
     onClose={closeConfirm}
   />
-
-  <ToastNotification {toast} {formDetected} />
-  </div>
-  </div>
 </ErrorBoundary>

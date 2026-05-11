@@ -87,7 +87,31 @@ export default defineContentScript({
                 });
                 return;
               }
-              const success = await fillSignupForm(form, updateAndCopyCredentials);
+
+              // Load selected identity from storage
+              const { identities = [], selectedIdentityId } = (await browser.storage.local.get([
+                'identities',
+                'selectedIdentityId',
+              ])) as {
+                identities?: Array<{
+                  id: string;
+                  firstNames: string;
+                  lastNames: string;
+                  useRandomPassword: boolean;
+                  customPassword?: string;
+                  phone?: string;
+                  pin?: string;
+                }>;
+                selectedIdentityId?: string;
+              };
+
+              const selectedIdentity = identities.find((i) => i.id === selectedIdentityId);
+
+              const success = await fillSignupForm(
+                form,
+                updateAndCopyCredentials,
+                selectedIdentity
+              );
               if (success) {
                 const hasPasswordField = form.querySelector(
                   'input[type="password"], input[name*="password"], input[id*="password"]'

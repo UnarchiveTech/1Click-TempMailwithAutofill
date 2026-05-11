@@ -1,222 +1,641 @@
 <script lang="ts">
+import { t } from 'svelte-i18n';
+import IconBell from '@/components/icons/IconBell.svelte';
+import IconChevronDown from '@/components/icons/IconChevronDown.svelte';
+import IconFilter from '@/components/icons/IconFilter.svelte';
+import IconRefresh from '@/components/icons/IconRefresh.svelte';
+import IconSearch from '@/components/icons/IconSearch.svelte';
+import IconX from '@/components/icons/IconX.svelte';
+
 let {
   searchQuery = '',
   sortBy = 'newest',
   otpOnly = false,
   senderDomain = '',
+  selectedSenders = [] as string[],
   dateFrom = '',
   dateTo = '',
+  emails = [] as import('@/utils/types.js').Email[],
   savedSearchFilters = [],
   onSearchChange = () => {},
   onSortChange = () => {},
   onOtpOnlyChange = () => {},
   onSenderDomainChange = () => {},
+  onSelectedSendersChange = (_v: string[]) => {},
   onDateFromChange = () => {},
   onDateToChange = () => {},
   onClearFilters = () => {},
   onSaveFilter = () => {},
   onLoadFilter = () => {},
+  onRenameFilter = () => {},
   onDeleteFilter = () => {},
   onRefreshInbox = () => {},
   onToggleNotifications = () => {},
   notificationsEnabled = true,
 } = $props();
 
-let filterOpen = $state(false);
 let saveFilterName = $state('');
 let showSaveFilter = $state(false);
+let searchFocused = $state(false);
+let sortDropdownOpen = $state(false);
+let dateDropdownOpen = $state(false);
+let fromDropdownOpen = $state(false);
+let savedFiltersDropdownOpen = $state(false);
+let manageFiltersOpen = $state(false);
+let renamingFilterId = $state<string | null>(null);
+let renameFilterName = $state('');
+let renameInputRef = $state<HTMLInputElement | null>(null);
+let fromSearch = $state('');
+let filterRowRef = $state<HTMLElement | null>(null);
+let showCustomRange = $state(false);
+let datePreset = $state<string>('any');
+
+// Focus action for rename input
+function focusOnMount(node: HTMLInputElement) {
+  node.focus();
+  node.select();
+}
+
+// Check if current filter matches any saved filter
+let currentFilterSaved = $derived(
+  (savedSearchFilters || []).some(
+    (f) =>
+      f.searchQuery === searchQuery &&
+      f.hasOTP === otpOnly &&
+      f.senderDomain === senderDomain &&
+      JSON.stringify(f.selectedSenders || []) === JSON.stringify(selectedSenders) &&
+      f.dateFrom === dateFrom &&
+      f.dateTo === dateTo
+  )
+);
+
+let senderSuggestions = $derived(
+  Array.from(
+    new Map(
+      emails
+        .filter((e) => e.from)
+        .map((e) => [e.from!.toLowerCase(), { email: e.from!, name: e.from_name || '' }])
+    ).values()
+  )
+    .filter(
+      (s) =>
+        fromSearch === '' ||
+        s.email.toLowerCase().includes(fromSearch.toLowerCase()) ||
+        s.name.toLowerCase().includes(fromSearch.toLowerCase())
+    )
+    .slice(0, 20)
+);
+
+function toggleSender(email: string) {
+  const lower = email.toLowerCase();
+  const exists = selectedSenders.some((s) => s.toLowerCase() === lower);
+  const updated = exists
+    ? selectedSenders.filter((s) => s.toLowerCase() !== lower)
+    : [...selectedSenders, email];
+  onSelectedSendersChange(updated);
+  selectedSenders = updated;
+}
+
+function getInitial(email: string, name: string): string {
+  return (name || email).trim().charAt(0).toUpperCase();
+}
+
+const AVATAR_COLORS = [
+  'bg-teal-600',
+  'bg-emerald-700',
+  'bg-pink-600',
+  'bg-indigo-600',
+  'bg-violet-600',
+  'bg-orange-600',
+  'bg-cyan-700',
+  'bg-rose-600',
+];
+
+function avatarColor(email: string): string {
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) hash = (hash * 31 + email.charCodeAt(i)) & 0xffff;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+const DATE_PRESETS = [
+  { value: 'any', label: 'Any time' },
+  { value: 'week', label: 'Older than a week' },
+  { value: 'month', label: 'Older than a month' },
+  { value: '6months', label: 'Older than six months' },
+  { value: 'year', label: 'Older than a year' },
+];
+
+function applyDatePreset(preset: string) {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  if (preset === 'any') {
+    onDateFromChange('');
+    onDateToChange('');
+    dateFrom = '';
+    dateTo = '';
+  } else if (preset === 'week') {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 7);
+    onDateFromChange('');
+    onDateToChange(fmt(d));
+    dateFrom = '';
+    dateTo = fmt(d);
+  } else if (preset === 'month') {
+    const d = new Date(now);
+    d.setMonth(d.getMonth() - 1);
+    onDateFromChange('');
+    onDateToChange(fmt(d));
+    dateFrom = '';
+    dateTo = fmt(d);
+  } else if (preset === '6months') {
+    const d = new Date(now);
+    d.setMonth(d.getMonth() - 6);
+    onDateFromChange('');
+    onDateToChange(fmt(d));
+    dateFrom = '';
+    dateTo = fmt(d);
+  } else if (preset === 'year') {
+    const d = new Date(now);
+    d.setFullYear(d.getFullYear() - 1);
+    onDateFromChange('');
+    onDateToChange(fmt(d));
+    dateFrom = '';
+    dateTo = fmt(d);
+  }
+  datePreset = preset;
+}
+
+function formatDateChip(from: string, to: string): string {
+  const fmtShort = (s: string) => {
+    if (!s) return '';
+    const [y, m, d] = s.split('-');
+    return `${m}/${d}/${y.slice(2)}`;
+  };
+  if (from && to) return `${fmtShort(from)}–${fmtShort(to)}`;
+  if (to) return `Until ${fmtShort(to)}`;
+  if (from) return `From ${fmtShort(from)}`;
+  return 'Date';
+}
 </script>
 
-<!-- Backdrop to close filter dropdown when clicking outside -->
-{#if filterOpen}
-  <button
-    class="fixed inset-0 z-10 cursor-default bg-transparent border-0"
-    aria-label="Close filters"
-    onclick={() => filterOpen = false}
-  ></button>
-{/if}
-
-<div class="flex items-center gap-1.5 px-1 pt-2 pb-1 relative">
+<div class="flex items-center gap-1.5 px-1 pt-2 pb-1 relative z-[100]">
   <!-- Search input with search icon left + filter button inside right -->
   <div class="relative flex-1">
-    <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"/>
-    </svg>
+    <IconSearch class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-md-on-surface/40 pointer-events-none" />
     <input
       type="text"
       placeholder="Search emails..."
-      class="input input-bordered input-sm w-full pl-8 pr-8 text-sm rounded-xl bg-base-200/50 focus:bg-base-100 transition-colors"
+      class="w-full pl-8 pr-8 text-sm rounded-xl border border-md-outline-variant bg-md-surface-container-low focus:bg-md-surface-container outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary transition-colors"
       aria-label="Search emails"
       bind:value={searchQuery}
       oninput={(e) => onSearchChange((e.target as HTMLInputElement).value)}
+      onfocus={() => searchFocused = true}
+      onblur={(e) => {
+        const relatedTarget = e.relatedTarget as HTMLElement;
+        const isClickingFilterRow = relatedTarget && filterRowRef?.contains(relatedTarget);
+        if (!isClickingFilterRow) {
+          setTimeout(() => searchFocused = false, 200);
+        }
+      }}
     />
     <!-- Filter button inside search input, right side -->
     <div class="absolute right-1.5 top-1/2 -translate-y-1/2">
       <button
-        class="w-6 h-6 flex items-center justify-center rounded-lg transition-colors {filterOpen ? 'text-primary' : 'text-base-content/40 hover:text-base-content/70'}"
+        class="w-6 h-6 flex items-center justify-center rounded-lg transition-colors {searchFocused ? 'text-md-primary' : 'text-md-on-surface/40 hover:text-md-on-surface/70'}"
         aria-label="Filters"
-        onclick={() => filterOpen = !filterOpen}
+        onclick={() => searchFocused = true}
       >
-        <svg width="14" height="14" viewBox="0 0 196 183" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M30 32 H112 C116 32 118 36 115 39 L84 75 V128 C84 132 81 135 77 132 L63 122 C61 120 60 118 60 115 V75 L27 39 C24 36 26 32 30 32 Z" />
-          <rect x="125" y="34" width="30" height="20" rx="10" />
-          <rect x="95" y="74" width="60" height="20" rx="10" />
-          <rect x="95" y="114" width="60" height="20" rx="10" />
-        </svg>
+        <IconFilter class="w-4 h-4 text-md-on-surface/40" />
       </button>
     </div>
   </div>
 
-  <!-- Filter dropdown positioned relative to main flex container -->
-  {#if filterOpen}
-    <div class="absolute right-0 top-10 w-[350px] bg-base-100 border border-base-300 rounded-lg shadow-xl z-20 overflow-hidden p-3 space-y-3">
-      <!-- Sort by -->
-      <div>
-        <label class="text-xs font-medium text-base-content/70 mb-1 block" for="sort-select">Sort by</label>
-        <select id="sort-select" class="select select-bordered select-xs w-full" bind:value={sortBy} onchange={(e) => onSortChange((e.target as HTMLSelectElement).value)}>
-          <option value="date">Date</option>
-          <option value="sender">Sender</option>
-        </select>
-      </div>
-
-      <!-- OTP only -->
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input type="checkbox" class="checkbox checkbox-xs" aria-label="Show only OTP emails" bind:checked={otpOnly} onchange={(e) => onOtpOnlyChange((e.target as HTMLInputElement).checked)} />
-        <span class="text-sm">OTP only</span>
-      </label>
-
-      <!-- Sender domain filter -->
-      <div>
-        <label class="text-xs font-medium text-base-content/70 mb-1 block" for="sender-domain">Sender domain</label>
-        <input
-          id="sender-domain"
-          type="text"
-          placeholder="e.g., gmail.com"
-          class="input input-bordered input-xs w-full"
-          aria-label="Filter by sender domain"
-          bind:value={senderDomain}
-          oninput={(e) => onSenderDomainChange((e.target as HTMLInputElement).value)}
-        />
-      </div>
-
-      <!-- Date range filter -->
-      <div class="space-y-2">
-        <span class="text-xs font-medium text-base-content/70 block">Date range</span>
-        <div class="flex gap-2">
-          <div class="flex-1">
-            <input
-              type="date"
-              class="input input-bordered input-xs w-full"
-              aria-label="Filter emails from this date"
-              placeholder="From"
-              bind:value={dateFrom}
-              onchange={(e) => onDateFromChange((e.target as HTMLInputElement).value)}
-            />
-          </div>
-          <div class="flex-1">
-            <input
-              type="date"
-              class="input input-bordered input-xs w-full"
-              aria-label="Filter emails until this date"
-              placeholder="To"
-              bind:value={dateTo}
-              onchange={(e) => onDateToChange((e.target as HTMLInputElement).value)}
-            />
-          </div>
-        </div>
-      </div>
-
-      <!-- Clear filters -->
-      <button class="btn btn-xs btn-ghost w-full mt-2" aria-label="Clear all filters" onclick={() => { onClearFilters(); filterOpen = false; }}>
-        Clear Filters
-      </button>
-
-      <!-- Save current filter -->
-      <button class="btn btn-xs btn-outline w-full" aria-label="Save current filter" onclick={() => showSaveFilter = true}>
-        Save Filter
-      </button>
-
-      {#if showSaveFilter}
-        <div class="mt-2 space-y-2">
-          <input
-            type="text"
-            placeholder="Filter name"
-            class="input input-bordered input-xs w-full"
-            aria-label="Enter filter name"
-            bind:value={saveFilterName}
-          />
-          <div class="flex gap-2">
-            <button
-              class="btn btn-xs btn-primary flex-1"
-              aria-label="Save filter"
-              onclick={() => {
-                if (saveFilterName.trim()) {
-                  onSaveFilter(saveFilterName.trim());
-                  saveFilterName = '';
-                  showSaveFilter = false;
-                }
-              }}
-            >
-              Save
-            </button>
-            <button
-              class="btn btn-xs btn-ghost flex-1"
-              aria-label="Cancel saving filter"
-              onclick={() => { saveFilterName = ''; showSaveFilter = false; }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      {/if}
-
-      <!-- Saved filters -->
-      {#if savedSearchFilters.length > 0}
-        <div class="divider my-2"></div>
-        <span class="text-xs font-medium text-base-content/70 block mb-2">Saved Filters</span>
-        <div class="space-y-1 max-h-32 overflow-y-auto">
-          {#each savedSearchFilters as filter}
-            <div class="flex items-center justify-between gap-2 text-xs">
-              <button
-                class="flex-1 text-left hover:underline truncate"
-                onclick={() => { onLoadFilter(filter); filterOpen = false; }}
-              >
-                {filter.name}
-              </button>
-              <button
-                class="btn btn-xs btn-ghost btn-square text-error"
-                aria-label="Delete filter"
-                onclick={() => onDeleteFilter(filter.id)}
-              >
-                ×
-              </button>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </div>
-  {/if}
-
   <!-- Refresh button -->
   <button
-    class="w-8 h-8 flex items-center justify-center rounded-xl bg-base-200 hover:bg-base-300 transition-colors shrink-0"
+    class="w-8 h-8 flex items-center justify-center rounded-xl bg-md-surface hover:bg-md-surface-variant transition-colors shrink-0"
     data-tip="Refresh"
     aria-label="Refresh inbox"
     onclick={() => onRefreshInbox()}
   >
-    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-base-content/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15"/>
-    </svg>
+    <IconRefresh class="w-4 h-4 text-md-on-surface/70" />
   </button>
   <!-- Notifications button -->
   <button
-    class="w-8 h-8 flex items-center justify-center rounded-xl transition-colors shrink-0 {notificationsEnabled ? 'bg-warning/20 hover:bg-warning/30' : 'bg-base-200 hover:bg-base-300'}"
+    class="w-8 h-8 flex items-center justify-center rounded-xl transition-colors shrink-0 {notificationsEnabled ? 'bg-md-warning/20 hover:bg-md-warning/30' : 'bg-md-surface hover:bg-md-surface-variant'}"
     data-tip="{notificationsEnabled ? 'Disable Notifications' : 'Enable Notifications'}"
     aria-label="Notifications"
     onclick={() => onToggleNotifications()}
   >
-    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 {notificationsEnabled ? 'text-warning' : 'text-base-content/40'}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0 1 18 14.158V11a6.002 6.002 0 0 0-4-5.659V5a2 2 0 1 0-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9"/>
-    </svg>
+    <IconBell class="w-4 h-4 {notificationsEnabled ? 'text-md-warning' : 'text-md-on-surface/40'}" />
   </button>
 </div>
+
+<!-- Inline filter row (appears when search is focused) -->
+{#if searchFocused}
+  <div bind:this={filterRowRef} class="flex items-center gap-2 px-1 pb-2 pt-0.5 overflow-x-auto relative z-[100]" style="scrollbar-width: thin; scrollbar-color: var(--md-primary) transparent;">
+
+    <!-- Sort chip -->
+    <div class="relative shrink-0">
+      <button
+        class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full border transition-colors {sortBy !== 'newest' ? 'border-md-primary bg-md-primary/10 text-md-primary' : 'border-md-outline-variant bg-transparent text-md-on-surface/80 hover:bg-md-surface-variant'}"
+        aria-label="Sort by"
+        onclick={() => { sortDropdownOpen = !sortDropdownOpen; dateDropdownOpen = false; savedFiltersDropdownOpen = false; fromDropdownOpen = false; }}
+      >
+        Sort: {sortBy === 'date' ? 'Date' : sortBy === 'sender' ? 'Sender' : 'Newest'}
+        <IconChevronDown class="w-3 h-3" />
+      </button>
+      {#if sortDropdownOpen}
+        <div class="absolute top-full left-0 mt-1 bg-md-surface border border-md-outline-variant rounded-xl shadow-lg z-[200] overflow-hidden min-w-[120px]">
+          {#each [['newest', 'Newest'], ['date', 'Date'], ['sender', 'Sender']] as [val, label]}
+            <button
+              class="w-full px-3 py-2 text-left text-xs hover:bg-md-surface-variant transition-colors {sortBy === val ? 'text-md-primary font-medium' : 'text-md-on-surface'}"
+              onclick={() => { onSortChange(val); sortBy = val; sortDropdownOpen = false; }}
+            >
+              {label}
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
+    <!-- Saved Filters chip -->
+    {#if savedSearchFilters.length > 0}
+      <div class="relative shrink-0">
+        <button
+          class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full border transition-colors border-md-outline-variant bg-transparent text-md-on-surface/80 hover:bg-md-surface-variant"
+          aria-label="Saved filters"
+          onclick={() => { savedFiltersDropdownOpen = !savedFiltersDropdownOpen; sortDropdownOpen = false; dateDropdownOpen = false; fromDropdownOpen = false; manageFiltersOpen = false; }}
+        >
+          Saved Filters
+          <IconChevronDown class="w-3 h-3" />
+        </button>
+        {#if savedFiltersDropdownOpen}
+          <div class="absolute top-full left-0 mt-1 bg-md-surface border border-md-outline-variant rounded-xl shadow-lg z-[200] overflow-hidden min-w-[150px]">
+            {#each savedSearchFilters as filter}
+              <button
+                class="w-full px-3 py-2 text-left text-xs hover:bg-md-surface-variant transition-colors text-md-on-surface"
+                onclick={() => { onLoadFilter(filter); savedFiltersDropdownOpen = false; }}
+              >
+                {filter.name}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
+
+    <!-- Manage Filters chip -->
+    {#if savedSearchFilters.length > 0}
+      <button
+        class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full border transition-colors border-md-outline-variant bg-transparent text-md-on-surface/80 hover:bg-md-surface-variant shrink-0"
+        aria-label="Manage filters"
+        onclick={() => { manageFiltersOpen = true; savedFiltersDropdownOpen = false; sortDropdownOpen = false; dateDropdownOpen = false; fromDropdownOpen = false; }}
+      >
+        Manage Filters
+      </button>
+    {/if}
+
+    <!-- OTP chip -->
+    <button
+      class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full border transition-colors shrink-0 {otpOnly ? 'border-md-primary bg-md-primary/10 text-md-primary' : 'border-md-outline-variant bg-transparent text-md-on-surface/80 hover:bg-md-surface-variant'}"
+      aria-label="Show only OTP emails"
+      onclick={() => { onOtpOnlyChange(!otpOnly); otpOnly = !otpOnly; }}
+    >
+      OTP only
+    </button>
+
+    <!-- From chip -->
+    <div class="relative shrink-0">
+      <button
+        class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full border transition-colors {selectedSenders.length > 0 ? 'border-md-primary bg-md-primary/10 text-md-primary' : 'border-md-outline-variant bg-transparent text-md-on-surface/80 hover:bg-md-surface-variant'}"
+        aria-label="Filter by sender"
+        onclick={() => { fromDropdownOpen = !fromDropdownOpen; sortDropdownOpen = false; dateDropdownOpen = false; savedFiltersDropdownOpen = false; }}
+      >
+        {#if selectedSenders.length === 0}
+          From
+        {:else if selectedSenders.length === 1}
+          From {selectedSenders[0].split('@')[0]}@…
+        {:else}
+          From {selectedSenders[0].split('@')[0]}@… +{selectedSenders.length - 1}
+        {/if}
+        <IconChevronDown class="w-3 h-3" />
+      </button>
+      {#if fromDropdownOpen}
+        <div class="absolute top-full left-0 mt-1 bg-md-surface-container border border-md-outline-variant rounded-2xl shadow-xl z-[200] overflow-hidden min-w-[260px]">
+          <!-- Header -->
+          <div class="flex items-center justify-between px-4 py-3 border-b border-md-outline-variant/30">
+            <span class="text-sm font-semibold text-md-on-surface">From</span>
+            <button class="w-5 h-5 flex items-center justify-center text-md-on-surface/60 hover:text-md-on-surface transition-colors" aria-label="Close from filter" onclick={() => fromDropdownOpen = false}>
+              <IconX class="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <!-- Selected chips -->
+          {#if selectedSenders.length > 0}
+            <div class="flex flex-wrap gap-1.5 px-4 pt-3 pb-1">
+              {#each selectedSenders as sender}
+                <div class="flex items-center gap-1 px-2 py-1 rounded-full border border-md-outline-variant text-xs bg-md-surface-variant">
+                  <span class="w-4 h-4 rounded-full flex items-center justify-center text-[9px] text-white font-bold {avatarColor(sender)}">
+                    {getInitial(sender, '')}
+                  </span>
+                  <span class="max-w-[120px] truncate">{sender}</span>
+                  <button onclick={() => toggleSender(sender)} aria-label="Remove sender" class="ml-0.5 text-md-on-surface/50 hover:text-md-on-surface">
+                    <IconX class="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              {/each}
+            </div>
+            <hr class="border-md-outline-variant/30 mt-2" />
+          {/if}
+          <!-- Search input -->
+          <div class="px-4 pt-3 pb-2">
+            <input
+              type="text"
+              placeholder="Type a name or email address"
+              class="w-full bg-transparent border-b border-md-outline-variant/50 pb-1 text-sm text-md-on-surface placeholder:text-md-on-surface/40 outline-none focus:border-md-primary transition-colors"
+              bind:value={fromSearch}
+              aria-label="Search sender"
+            />
+          </div>
+          <!-- Suggestions -->
+          {#if senderSuggestions.length > 0}
+            <div class="px-4 pb-1">
+              <span class="text-xs font-medium text-md-on-surface/50">Suggestions</span>
+            </div>
+          {/if}
+          <div class="max-h-48 overflow-y-auto pb-2" style="scrollbar-width: thin; scrollbar-color: var(--md-primary) transparent;">
+            {#each senderSuggestions as suggestion}
+              {@const isSelected = selectedSenders.some((s) => s.toLowerCase() === suggestion.email.toLowerCase())}
+              <button
+                class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-md-surface-variant/50 transition-colors text-left"
+                onclick={() => toggleSender(suggestion.email)}
+              >
+                <span class="w-7 h-7 rounded-full flex items-center justify-center text-xs text-white font-bold shrink-0 transition-colors {isSelected ? 'bg-md-primary' : avatarColor(suggestion.email)}">
+                  {#if isSelected}
+                    ✓
+                  {:else}
+                    {getInitial(suggestion.email, suggestion.name)}
+                  {/if}
+                </span>
+                <div class="min-w-0">
+                  <div class="text-sm text-md-on-surface truncate">{suggestion.email}</div>
+                  <div class="text-xs text-md-on-surface/50 truncate">{suggestion.email}</div>
+                </div>
+              </button>
+            {:else}
+              <div class="px-4 py-3 text-xs text-md-on-surface/40">No Suggestions</div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+    </div>
+
+    <!-- Date chip -->
+    <div class="relative shrink-0">
+      <button
+        class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full border transition-colors {(dateFrom || dateTo) ? 'border-md-primary bg-md-primary/10 text-md-primary' : 'border-md-outline-variant bg-transparent text-md-on-surface/80 hover:bg-md-surface-variant'}"
+        aria-label="Filter by date"
+        onclick={() => { dateDropdownOpen = !dateDropdownOpen; sortDropdownOpen = false; showCustomRange = false; savedFiltersDropdownOpen = false; fromDropdownOpen = false; }}
+      >
+        {formatDateChip(dateFrom, dateTo)}
+        <IconChevronDown class="w-3 h-3" />
+      </button>
+      {#if dateDropdownOpen}
+        <div class="absolute top-full left-0 mt-1 bg-md-surface-container border border-md-outline-variant rounded-2xl shadow-xl z-[200] overflow-hidden min-w-[220px]">
+          <!-- Header -->
+          <div class="flex items-center justify-between px-4 py-3 border-b border-md-outline-variant/30">
+            <span class="text-sm font-semibold text-md-on-surface">Date</span>
+            <button class="w-5 h-5 flex items-center justify-center text-md-on-surface/60 hover:text-md-on-surface transition-colors" aria-label="Close date filter" onclick={() => { dateDropdownOpen = false; showCustomRange = false; }}>
+              <IconX class="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {#if !showCustomRange}
+            <!-- Preset options -->
+            <div class="py-2">
+              {#each DATE_PRESETS as preset}
+                <label class="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-md-surface-variant/50 transition-colors">
+                  <span class="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors {datePreset === preset.value ? 'border-md-primary' : 'border-md-outline-variant'}">
+                    {#if datePreset === preset.value}
+                      <span class="w-2 h-2 rounded-full bg-md-primary"></span>
+                    {/if}
+                  </span>
+                  <input type="radio" class="sr-only" name="date-preset" value={preset.value} checked={datePreset === preset.value} onchange={() => { applyDatePreset(preset.value); if (preset.value !== 'custom') dateDropdownOpen = false; }} />
+                  <span class="text-sm text-md-on-surface">{preset.label}</span>
+                </label>
+              {/each}
+            </div>
+            <!-- Custom range link -->
+            <div class="px-4 py-2 border-t border-md-outline-variant/30">
+              <button class="text-sm text-md-primary hover:underline" onclick={() => showCustomRange = true}>Custom range</button>
+            </div>
+          {:else}
+            <!-- Custom range picker -->
+            <div class="p-4 space-y-3">
+              <button class="text-xs text-md-on-surface/50 hover:text-md-on-surface flex items-center gap-1" onclick={() => showCustomRange = false}>
+                ← Back
+              </button>
+              <div class="flex flex-col gap-1">
+                <span class="text-xs text-md-on-surface/50">From</span>
+                <input
+                  type="date"
+                  class="w-full px-2 py-1 rounded border border-md-outline-variant text-xs bg-md-surface-container-low outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary"
+                  aria-label="Filter emails from this date"
+                  bind:value={dateFrom}
+                  onchange={(e) => { onDateFromChange((e.target as HTMLInputElement).value); datePreset = 'custom'; }}
+                />
+              </div>
+              <div class="flex flex-col gap-1">
+                <span class="text-xs text-md-on-surface/50">To</span>
+                <input
+                  type="date"
+                  class="w-full px-2 py-1 rounded border border-md-outline-variant text-xs bg-md-surface-container-low outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary"
+                  aria-label="Filter emails until this date"
+                  bind:value={dateTo}
+                  onchange={(e) => { onDateToChange((e.target as HTMLInputElement).value); datePreset = 'custom'; }}
+                />
+              </div>
+              <button
+                class="w-full px-3 py-1.5 text-xs rounded-xl bg-md-primary text-md-on-primary hover:bg-md-primary/90 transition-colors"
+                onclick={() => dateDropdownOpen = false}
+              >
+                Apply
+              </button>
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+
+    <!-- Clear all chip (only shown if any filter is active) -->
+    {#if sortBy !== 'newest' || otpOnly || dateFrom || dateTo || selectedSenders.length > 0}
+      <button
+        class="flex items-center gap-1 px-3 py-1.5 text-xs rounded-full border border-md-error/50 bg-transparent text-md-error hover:bg-md-error/10 transition-colors shrink-0"
+        aria-label="Clear all filters"
+        onclick={() => { onClearFilters(); sortBy = 'newest'; otpOnly = false; dateFrom = ''; dateTo = ''; onSelectedSendersChange([]); selectedSenders = []; }}
+      >
+        <IconX class="w-3 h-3" />
+        Clear
+      </button>
+    {/if}
+
+    <!-- Save as filter button (only shown if current filter is not saved and has active filters) -->
+    {#if !currentFilterSaved && (sortBy !== 'newest' || otpOnly || dateFrom || dateTo || selectedSenders.length > 0 || searchQuery !== '')}
+      <button
+        class="flex items-center gap-1 px-3 py-1.5 text-xs rounded-full border border-md-primary bg-transparent text-md-primary hover:bg-md-primary/10 transition-colors shrink-0"
+        aria-label="Save as filter"
+        onclick={() => { showSaveFilter = true; }}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+        </svg>
+        Save as filter
+      </button>
+    {/if}
+  </div>
+{/if}
+
+<!-- Save Filter Dialog -->
+{#if showSaveFilter}
+  <div class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+    <button class="absolute inset-0 bg-black/50 cursor-default" aria-label="Close" onclick={() => showSaveFilter = false}></button>
+    <div class="relative bg-md-surface rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden flex flex-col">
+      <!-- Header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-md-outline-variant">
+        <h3 class="text-lg font-semibold text-md-on-surface">Save Filter</h3>
+        <button class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-md-surface-variant transition-colors" aria-label="Close" onclick={() => showSaveFilter = false}>
+          <IconX class="w-5 h-5 text-md-on-surface/60" />
+        </button>
+      </div>
+      
+      <!-- Content -->
+      <div class="p-4 space-y-3">
+        <input
+          type="text"
+          placeholder="Filter name"
+          class="w-full px-3 py-2 rounded-lg border border-md-outline-variant bg-md-surface-container-low text-sm outline-none focus:border-md-primary focus:ring-1 focus:ring-md-primary"
+          aria-label="Enter filter name"
+          bind:value={saveFilterName}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') {
+              if (saveFilterName.trim()) {
+                onSaveFilter(saveFilterName.trim());
+                saveFilterName = '';
+                showSaveFilter = false;
+              }
+            }
+          }}
+          use:focusOnMount
+        />
+        <div class="flex gap-2">
+          <button
+            class="flex-1 px-3 py-2 rounded-lg bg-md-primary text-md-on-primary text-sm font-medium hover:bg-md-primary/90 transition-colors"
+            aria-label="Save filter"
+            onclick={() => {
+              if (saveFilterName.trim()) {
+                onSaveFilter(saveFilterName.trim());
+                saveFilterName = '';
+                showSaveFilter = false;
+              }
+            }}
+          >
+            Save
+          </button>
+          <button
+            class="flex-1 px-3 py-2 rounded-lg bg-transparent hover:bg-md-surface-variant text-sm transition-colors"
+            aria-label="Cancel saving filter"
+            onclick={() => { saveFilterName = ''; showSaveFilter = false; }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Manage Filters Dialog -->
+{#if manageFiltersOpen}
+  <div class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+    <button class="absolute inset-0 bg-black/50 cursor-default" aria-label="Close" onclick={() => manageFiltersOpen = false}></button>
+    <div class="relative bg-md-surface rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col">
+      <!-- Header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-md-outline-variant">
+        <h3 class="text-lg font-semibold text-md-on-surface">Manage Filters</h3>
+        <button class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-md-surface-variant transition-colors" aria-label="Close" onclick={() => manageFiltersOpen = false}>
+          <IconX class="w-5 h-5 text-md-on-surface/60" />
+        </button>
+      </div>
+      
+      <!-- Filter List -->
+      <div class="flex-1 overflow-y-auto p-4 space-y-2" style="scrollbar-width: thin; scrollbar-color: var(--md-primary) transparent;">
+        {#each savedSearchFilters as filter}
+          <div class="flex items-center gap-2 p-3 rounded-xl bg-md-surface-container-low border border-md-outline-variant/30">
+            {#if renamingFilterId === filter.id}
+              <!-- Rename mode -->
+              <input
+                type="text"
+                class="flex-1 px-3 py-2 rounded-lg border border-md-primary bg-md-surface text-sm outline-none focus:ring-1 focus:ring-md-primary"
+                bind:value={renameFilterName}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (renameFilterName.trim()) {
+                      onRenameFilter(filter.id, renameFilterName.trim());
+                      renamingFilterId = null;
+                      renameFilterName = '';
+                    }
+                  } else if (e.key === 'Escape') {
+                    renamingFilterId = null;
+                    renameFilterName = '';
+                  }
+                }}
+                use:focusOnMount
+              />
+              <button
+                class="px-3 py-2 rounded-lg bg-md-primary text-md-on-primary text-sm font-medium hover:bg-md-primary/90 transition-colors"
+                onclick={() => {
+                  if (renameFilterName.trim()) {
+                    onRenameFilter(filter.id, renameFilterName.trim());
+                    renamingFilterId = null;
+                    renameFilterName = '';
+                  }
+                }}
+              >
+                Save
+              </button>
+              <button
+                class="px-3 py-2 rounded-lg bg-transparent hover:bg-md-surface-variant text-sm transition-colors"
+                onclick={() => { renamingFilterId = null; renameFilterName = ''; }}
+              >
+                Cancel
+              </button>
+            {:else}
+              <!-- View mode -->
+              <span class="flex-1 text-sm font-medium text-md-on-surface truncate">{filter.name}</span>
+              <button
+                class="p-2 rounded-lg hover:bg-md-surface-variant transition-colors"
+                aria-label="Rename filter"
+                onclick={() => { renamingFilterId = filter.id; renameFilterName = filter.name; }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-md-on-surface/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+              <button
+                class="p-2 rounded-lg hover:bg-md-error/10 transition-colors"
+                aria-label="Delete filter"
+                onclick={() => onDeleteFilter(filter.id)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-md-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            {/if}
+          </div>
+        {/each}
+        {#if savedSearchFilters.length === 0}
+          <p class="text-center text-sm text-md-on-surface/40 py-8">No saved filters</p>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}

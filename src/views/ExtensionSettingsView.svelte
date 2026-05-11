@@ -1,15 +1,26 @@
 <script lang="ts">
+import { t } from 'svelte-i18n';
 import { browser } from 'wxt/browser';
+import ToastContainer from '@/components/feedback/ToastContainer.svelte';
 import IconArchive from '@/components/icons/IconArchive.svelte';
+import IconChevronDown from '@/components/icons/IconChevronDown.svelte';
 import IconMail from '@/components/icons/IconMail.svelte';
 import IconPlus from '@/components/icons/IconPlus.svelte';
+import IconRefresh from '@/components/icons/IconRefresh.svelte';
 import IconSettings from '@/components/icons/IconSettings.svelte';
 import IconSun from '@/components/icons/IconSun.svelte';
 import IconUser from '@/components/icons/IconUser.svelte';
 import IconX from '@/components/icons/IconX.svelte';
 import ConfirmDialog from '@/components/overlays/ConfirmDialog.svelte';
-import { getAllProviderConfigs, loadProviderConfig } from '@/services/email-service.js';
-import * as PingService from '@/services/ping-service.js';
+import LanguageSwitcher from '@/components/ui/LanguageSwitcher.svelte';
+import {
+  getAllProviderConfigs,
+  loadProviderConfig,
+  type ProviderConfig,
+} from '@/utils/email-service.js';
+import { setupFocusTrap } from '@/utils/focusTrap.js';
+import * as PingService from '@/utils/ping-service.js';
+import { toastStore } from '@/utils/toastStore.js';
 import type { ProviderInstance } from '@/utils/types.js';
 
 let {
@@ -48,6 +59,8 @@ let {
   enableLogging = false,
   onToggleDeveloperSettings = () => {},
   onToggleEnableLogging = () => {},
+  contrastLevel = 'standard',
+  onContrastLevelChange = () => {},
 }: {
   context?: 'popup' | 'sidepanel' | 'app';
   onBack?: () => void;
@@ -84,6 +97,8 @@ let {
   enableLogging?: boolean;
   onToggleDeveloperSettings?: () => void;
   onToggleEnableLogging?: () => void;
+  contrastLevel?: 'standard' | 'medium' | 'high';
+  onContrastLevelChange?: (level: 'standard' | 'medium' | 'high') => void;
 } = $props();
 
 let showCustomInstanceForm = $state(false);
@@ -91,7 +106,7 @@ let customInstanceName = $state('');
 let customInstanceUrl = $state('');
 let confirmDialog = $state<{ message: string; onConfirm: () => void } | null>(null);
 let confirmDialogRef = $state<HTMLElement | null>(null);
-let allProviders = $derived.by(() => getAllProviderConfigs());
+let allProviders = $derived.by((): ProviderConfig[] => getAllProviderConfigs());
 
 // Ping state
 let providerPingResults = $state(new Map<string, Map<string, number | 'timeout'>>());
@@ -108,9 +123,7 @@ function closeConfirmDialog() {
   confirmDialog = null;
 }
 
-async function handleProviderChange(e: Event) {
-  const target = e.target as HTMLSelectElement;
-  const provider = target.value;
+async function handleProviderChange(provider: string) {
   await browser.storage.local.set({ selectedProvider: provider });
   await browser.runtime.sendMessage({ action: 'setProvider', provider });
   onProviderChange(provider);
@@ -160,54 +173,23 @@ async function pingAllProviders() {
 
   const results = new Map<string, Map<string, number | 'timeout'>>();
 
-  console.log('Starting ping for all providers...');
-  console.log('Provider instances:', providerInstances);
-  console.log('Selected provider:', selectedProvider);
-
   for (const provider of allProviders) {
-    const providerId = (provider as { id: string }).id;
-    console.log('Pinging provider:', providerId, 'provider:', provider);
+    const providerId = provider.id;
 
     const config = loadProviderConfig(providerId);
-    console.log('Provider config:', config);
-    console.log('Is multi-instance:', config.multiInstance?.enabled);
-    console.log('Has provider instances:', providerInstances.length > 0);
 
     if (config.multiInstance?.enabled && providerInstances.length > 0) {
       // Ping instances for multi-instance providers
-      console.log('Multi-instance provider, pinging instances...');
-      const providerWithConfig = {
-        name: (provider as { name: string }).name,
-        displayName: (provider as { displayName: string }).displayName,
-        apiUrl: (provider as { apiUrl: string }).apiUrl,
-        type: (provider as { id: string }).id,
-      };
-      const pingResults = await PingService.pingProviderInstances(
-        providerWithConfig,
-        providerInstances
-      );
+      const pingResults = await PingService.pingProviderInstances(config, providerInstances);
       results.set(providerId, pingResults);
-      console.log('Ping results for', providerId, ':', pingResults);
-      console.log('Ping results size:', pingResults.size);
     } else {
       // Ping single-instance providers
-      console.log('Single-instance provider, pinging directly...');
-      const providerWithConfig = {
-        name: (provider as { name: string }).name,
-        displayName: (provider as { displayName: string }).displayName,
-        apiUrl: (provider as { apiUrl: string }).apiUrl,
-        type: (provider as { id: string }).id,
-      };
-      const pingResults = await PingService.pingProviderInstances(providerWithConfig, []);
+      const pingResults = await PingService.pingProviderInstances(config, []);
       results.set(providerId, pingResults);
-      console.log('Ping results for', providerId, ':', pingResults);
-      console.log('Ping results size:', pingResults.size);
     }
   }
 
   providerPingResults = results;
-  console.log('Final ping results map:', providerPingResults);
-  console.log('Map keys:', Array.from(providerPingResults.keys()));
   pinging = false;
 }
 
@@ -229,80 +211,98 @@ $effect(() => {
 </script>
 
 {#if loading}
-  <div class="flex-1 overflow-y-auto px-4 py-4 space-y-4" style="scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent;">
+  <div class="flex-1 overflow-y-auto px-4 py-4 space-y-4" style="scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--md-outline, #75777f) 0.2, transparent) transparent;">
     {#each [1,2,3,4,5] as _}
-      <div class="rounded-xl bg-base-100 p-4 space-y-2 animate-pulse">
-        <div class="h-3 w-24 bg-base-300 rounded"></div>
-        <div class="h-8 w-full bg-base-300 rounded"></div>
+      <div class="rounded-xl bg-md-primary-container p-4 space-y-2 animate-pulse">
+        <div class="h-3 w-24 bg-md-outline-variant rounded"></div>
+        <div class="h-8 w-full bg-md-outline-variant rounded"></div>
       </div>
     {/each}
   </div>
 {:else}
-<div class="flex-1 overflow-y-auto px-4 py-4 space-y-5 pb-20" style="scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent;">
+<div class="flex-1 overflow-y-auto px-4 py-4 space-y-5 pb-20" style="scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--md-outline, #75777f) 0.2, transparent) transparent;">
 
   <!-- Page heading -->
   <div class="pt-1">
-    <h1 class="text-lg font-bold text-base-content">Preferences</h1>
-    <p class="text-xs text-base-content/50 mt-0.5">Configure your extension identity.</p>
+    <h1 class="text-lg font-bold text-md-on-surface">Preferences</h1>
+    <p class="text-xs text-md-on-surface/50 mt-0.5">Configure your extension identity.</p>
   </div>
 
   <!-- ── General ── -->
   <section class="space-y-2">
     <div class="flex items-center gap-2 mb-1">
-      <IconSettings class="w-4 h-4 text-primary" />
-      <span class="text-sm font-semibold text-base-content">General</span>
+      <IconSettings class="w-4 h-4 text-md-primary" />
+      <span class="text-sm font-semibold text-md-on-surface">General</span>
+    </div>
+
+    <!-- Language Switcher -->
+    <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-center justify-between">
+      <div>
+        <div class="text-sm font-medium text-md-on-surface">Language</div>
+        <div class="text-xs text-md-on-surface/50">Select your preferred language</div>
+      </div>
+      <LanguageSwitcher />
     </div>
 
     <!-- Auto-Copy row -->
-    <div class="bg-base-100 rounded-xl px-4 py-3 flex items-center justify-between">
+    <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-center justify-between">
       <div>
-        <div class="text-sm font-medium text-base-content">Auto-Copy</div>
-        <div class="text-xs text-base-content/50">Copy to clipboard after generation</div>
+        <div class="text-sm font-medium text-md-on-surface">{$t('settings.autoCopy')}</div>
+        <div class="text-xs text-md-on-surface/50">{$t('settings.autoCopyDescription')}</div>
       </div>
-      <input type="checkbox" class="toggle toggle-primary toggle-sm" aria-label="Toggle auto-copy" checked={autoCopy} onchange={(e) => { if (onSetAutoCopy) onSetAutoCopy((e.target as HTMLInputElement).checked); onSaveSettings(); }} />
+      <label class="cursor-pointer">
+        <input type="checkbox" class="sr-only peer" aria-label="Toggle auto-copy" checked={autoCopy} onchange={(e) => { if (onSetAutoCopy) onSetAutoCopy((e.target as HTMLInputElement).checked); onSaveSettings(); }} />
+        <div class="relative w-9 h-5 bg-md-outline-variant peer-checked:bg-md-primary rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+      </label>
     </div>
   </section>
 
   <!-- ── Identity ── -->
   <section class="space-y-2">
     <div class="flex items-center gap-2 mb-1">
-      <IconUser class="w-4 h-4 text-primary" />
-      <span class="text-sm font-semibold text-base-content">Identity</span>
+      <IconUser class="w-4 h-4 text-md-primary" />
+      <span class="text-sm font-semibold text-md-on-surface">{$t('identities.title')}</span>
     </div>
 
     <!-- Custom Password row -->
-    <div class="bg-base-100 rounded-xl px-4 py-3 flex items-center justify-between">
+    <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-center justify-between">
       <div>
-        <div class="text-sm font-medium text-base-content">Custom Password</div>
-        <div class="text-xs text-base-content/50">Override system credentials</div>
+        <div class="text-sm font-medium text-md-on-surface">{$t('identities.password')}</div>
+        <div class="text-xs text-md-on-surface/50">Override system credentials</div>
       </div>
-      <input type="checkbox" class="toggle toggle-primary toggle-sm" aria-label="Toggle custom password" checked={useCustomPassword} onchange={(e) => { if (onSetUseCustomPassword) onSetUseCustomPassword((e.target as HTMLInputElement).checked); onSaveSettings(); }} />
+      <label class="cursor-pointer">
+        <input type="checkbox" class="sr-only peer" aria-label="Toggle custom password" checked={useCustomPassword} onchange={(e) => { if (onSetUseCustomPassword) onSetUseCustomPassword((e.target as HTMLInputElement).checked); onSaveSettings(); }} />
+        <div class="relative w-9 h-5 bg-md-outline-variant peer-checked:bg-md-primary rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+      </label>
     </div>
     {#if useCustomPassword}
-      <div class="bg-base-100 rounded-xl px-4 py-3">
-        <div class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5">Custom Password</div>
-        <input type="text" class="w-full bg-transparent text-sm outline-none text-base-content placeholder:text-base-content/30" placeholder="Enter password..." aria-label="Custom password" value={customPassword} oninput={(e) => { if (onSetCustomPassword) onSetCustomPassword((e.target as HTMLInputElement).value); onSaveSettings(); }} />
+      <div class="bg-md-primary-container rounded-xl px-4 py-3">
+        <div class="text-[10px] font-semibold text-md-on-surface/40 uppercase tracking-wider mb-1.5">{$t('identities.customPassword')}</div>
+        <input type="text" class="w-full bg-transparent text-sm outline-none text-md-on-surface placeholder:text-md-on-surface/30" placeholder="Enter password..." aria-label="Custom password" value={customPassword} oninput={(e) => { if (onSetCustomPassword) onSetCustomPassword((e.target as HTMLInputElement).value); onSaveSettings(); }} />
       </div>
     {/if}
 
     <!-- Custom Name row -->
-    <div class="bg-base-100 rounded-xl px-4 py-3 flex items-center justify-between">
+    <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-center justify-between">
       <div>
-        <div class="text-sm font-medium text-base-content">Custom Name</div>
-        <div class="text-xs text-base-content/50">Use for autofill forms</div>
+        <div class="text-sm font-medium text-md-on-surface">{$t('identities.name')}</div>
+        <div class="text-xs text-md-on-surface/50">Use for autofill forms</div>
       </div>
-      <input type="checkbox" class="toggle toggle-primary toggle-sm" aria-label="Toggle custom name" checked={useCustomName} onchange={(e) => { if (onSetUseCustomName) onSetUseCustomName((e.target as HTMLInputElement).checked); onSaveSettings(); }} />
+      <label class="cursor-pointer">
+        <input type="checkbox" class="sr-only peer" aria-label="Toggle custom name" checked={useCustomName} onchange={(e) => { if (onSetUseCustomName) onSetUseCustomName((e.target as HTMLInputElement).checked); onSaveSettings(); }} />
+        <div class="relative w-9 h-5 bg-md-outline-variant peer-checked:bg-md-primary rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+      </label>
     </div>
     {#if useCustomName}
-      <div class="bg-base-100 rounded-xl px-4 py-3 space-y-3">
+      <div class="bg-md-primary-container rounded-xl px-4 py-3 space-y-3">
         <div>
-          <div class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5">First Name</div>
-          <input type="text" class="w-full bg-transparent text-sm outline-none text-base-content placeholder:text-base-content/30" placeholder="Alex" aria-label="First name" value={customFirstName} oninput={(e) => { if (onSetCustomFirstName) onSetCustomFirstName((e.target as HTMLInputElement).value); onSaveSettings(); }} />
+          <div class="text-xs font-semibold text-md-secondary uppercase tracking-wider mb-1.5">{$t('identities.firstNames')}</div>
+          <input type="text" class="w-full bg-transparent text-sm outline-none text-md-on-surface placeholder:text-md-on-surface/30" placeholder="Alex" aria-label="First name" value={customFirstName} oninput={(e) => { if (onSetCustomFirstName) onSetCustomFirstName((e.target as HTMLInputElement).value); onSaveSettings(); }} />
         </div>
-        <div class="border-t border-base-200"></div>
+        <div class="border-t border-md-secondary-container"></div>
         <div>
-          <div class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5">Last Name</div>
-          <input type="text" class="w-full bg-transparent text-sm outline-none text-base-content placeholder:text-base-content/30" placeholder="Editorial" aria-label="Last name" value={customLastName} oninput={(e) => { if (onSetCustomLastName) onSetCustomLastName((e.target as HTMLInputElement).value); onSaveSettings(); }} />
+          <div class="text-xs font-semibold text-md-secondary uppercase tracking-wider mb-1.5">{$t('identities.lastNames')}</div>
+          <input type="text" class="w-full bg-transparent text-sm outline-none text-md-on-surface placeholder:text-md-on-surface/30" placeholder="Editorial" aria-label="Last name" value={customLastName} oninput={(e) => { if (onSetCustomLastName) onSetCustomLastName((e.target as HTMLInputElement).value); onSaveSettings(); }} />
         </div>
       </div>
     {/if}
@@ -312,68 +312,64 @@ $effect(() => {
   <section class="space-y-2">
     <div class="flex items-center justify-between mb-1">
       <div class="flex items-center gap-2">
-        <IconMail class="w-4 h-4 text-primary" />
-        <span class="text-sm font-semibold text-base-content">Mail</span>
+        <IconMail class="w-4 h-4 text-md-primary" />
+        <span class="text-sm font-semibold text-md-on-surface">{$t('inbox.title')}</span>
       </div>
       <button
-        class="btn btn-ghost btn-xs btn-circle hover:bg-base-200"
+        class="w-6 h-6 flex items-center justify-center rounded-full bg-transparent hover:bg-md-secondary-container transition-colors"
         aria-label="Refresh ping"
         onclick={() => {
           providerPingResults.clear();
           pingAllProviders();
         }}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
+        <IconRefresh class="w-4 h-4" />
       </button>
     </div>
 
-    <div class="bg-base-100 rounded-xl px-4 py-3">
-      <div class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5">Provider</div>
+    <div class="bg-md-primary-container rounded-xl px-4 py-3">
+      <div class="text-xs font-semibold text-md-secondary uppercase tracking-wider mb-1.5">{$t('settings.provider')}</div>
       <div class="relative">
         <button
-          class="w-full bg-transparent text-sm outline-none text-base-content appearance-none cursor-pointer font-medium flex items-center justify-between"
+          class="w-full bg-transparent text-sm outline-none text-md-on-surface appearance-none cursor-pointer font-medium flex items-center justify-between"
           onclick={() => providerDropdownOpen = !providerDropdownOpen}
           aria-label="Select mail provider"
         >
           <span>
             {#each allProviders as provider}
-              {#if (provider as any).id === selectedProvider}
+              {#if provider.id === selectedProvider}
                 {@const pingResults = providerPingResults.get(selectedProvider)}
                 {@const fastestPing = pingResults ? PingService.getFastestPing(pingResults) : null}
                 {provider.displayName}
                 {#if fastestPing !== null && fastestPing !== undefined}
-                  <span class="text-xs text-base-content/50 ml-2">{getPingDot(fastestPing)} {PingService.formatPing(fastestPing)}</span>
+                  <span class="text-xs text-md-on-surface/50 ml-2">{getPingDot(fastestPing)} {PingService.formatPing(fastestPing)}</span>
                 {:else}
-                  <span class="text-xs text-base-content/50 ml-2">⏳</span>
+                  <span class="text-xs text-md-on-surface/50 ml-2">⏳</span>
                 {/if}
               {/if}
             {/each}
           </span>
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          <IconChevronDown class="w-4 h-4 ml-2" />
         </button>
         {#if providerDropdownOpen}
-          <div class="absolute top-full left-0 right-0 mt-1 bg-base-100 rounded-xl shadow-lg border border-base-200 z-50 max-h-60 overflow-y-auto">
+          <div class="absolute top-full left-0 right-0 mt-1 bg-md-primary-container rounded-xl shadow-lg border border-md-secondary-container z-50 max-h-60 overflow-y-auto">
             {#each allProviders as provider}
-              {@const providerId = (provider as any).id}
+              {@const providerId = provider.id}
               {@const pingResults = providerPingResults.get(providerId)}
               {@const fastestPing = pingResults ? PingService.getFastestPing(pingResults) : null}
               <button
-                class="w-full px-4 py-2 text-sm text-left hover:bg-base-200 flex items-center justify-between"
+                class="w-full px-4 py-2 text-sm text-left hover:bg-md-secondary-container flex items-center justify-between"
                 onclick={() => {
                   selectedProvider = providerId;
-                  handleProviderChange({ target: { value: providerId } } as any);
+                  handleProviderChange(providerId);
                   providerDropdownOpen = false;
                 }}
               >
                 <span>{provider.displayName}</span>
                 {#if fastestPing !== null && fastestPing !== undefined}
-                  <span class="text-xs text-base-content/50">{getPingDot(fastestPing)} {PingService.formatPing(fastestPing)}</span>
+                  <span class="text-xs text-md-on-surface/50">{getPingDot(fastestPing)} {PingService.formatPing(fastestPing)}</span>
                 {:else}
-                  <span class="text-xs text-base-content/50">⏳</span>
+                  <span class="text-xs text-md-on-surface/50">⏳</span>
                 {/if}
               </button>
             {/each}
@@ -383,13 +379,13 @@ $effect(() => {
     </div>
 
     <!-- Auto-Renew row -->
-    <div class="bg-base-100 rounded-xl px-4 py-3 flex items-center justify-between">
+    <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-center justify-between">
       <div>
-        <div class="text-sm font-medium text-base-content">Auto-Renew</div>
-        <div class="text-xs text-base-content/50">Auto-renew email before expiry</div>
+        <div class="text-sm font-medium text-md-on-surface">{$t('settings.autoRenew')}</div>
+        <div class="text-xs text-md-on-surface/50">{$t('settings.autoRenewDescription')}</div>
       </div>
       <button
-        class="btn btn-sm btn-square rounded-xl {autoRenew ? 'bg-primary/10 hover:bg-primary/20 text-primary' : 'bg-base-200 hover:bg-base-300 text-base-content/60'} border-0"
+        class="w-8 h-8 flex items-center justify-center rounded-xl border-0 {autoRenew ? 'bg-md-primary/10 hover:bg-md-primary/20 text-md-primary' : 'bg-md-secondary-container hover:bg-md-outline-variant text-md-on-surface/60'} transition-colors"
         aria-label="Toggle auto-renew"
         onclick={() => { if (onSetAutoRenew) onSetAutoRenew(!autoRenew); onSaveSettings(); }}
       >
@@ -400,11 +396,11 @@ $effect(() => {
     </div>
 
     {#if loadProviderConfig(selectedProvider).multiInstance?.enabled}
-      <div class="bg-base-100 rounded-xl px-4 py-3">
-        <div class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5">Instance Selection</div>
+      <div class="bg-md-tertiary-container rounded-xl px-4 py-3">
+        <div class="text-[10px] font-semibold text-md-on-surface/40 uppercase tracking-wider mb-1.5">Instance Selection</div>
         <div class="relative">
           <button
-            class="w-full bg-transparent text-sm outline-none text-base-content appearance-none cursor-pointer font-medium flex items-center justify-between"
+            class="w-full bg-transparent text-sm outline-none text-md-on-surface appearance-none cursor-pointer font-medium flex items-center justify-between"
             onclick={() => instanceDropdownOpen = !instanceDropdownOpen}
             aria-label="Select provider instance"
           >
@@ -418,9 +414,9 @@ $effect(() => {
                     {@const instancePing = pingResults?.get(instance.id)}
                     {instance.displayName}{instance.isCustom ? ' (Custom)' : ''}
                     {#if instancePing !== undefined && instancePing !== null}
-                      <span class="text-xs text-base-content/50 ml-2">{getPingDot(instancePing)} {PingService.formatPing(instancePing)}</span>
+                      <span class="text-xs text-md-on-surface/50 ml-2">{getPingDot(instancePing)} {PingService.formatPing(instancePing)}</span>
                     {:else}
-                      <span class="text-xs text-base-content/50 ml-2">⏳</span>
+                      <span class="text-xs text-md-on-surface/50 ml-2">⏳</span>
                     {/if}
                   {/if}
                 {/each}
@@ -431,9 +427,9 @@ $effect(() => {
             </svg>
           </button>
           {#if instanceDropdownOpen}
-            <div class="absolute top-full left-0 right-0 mt-1 bg-base-100 rounded-xl shadow-lg border border-base-200 z-50 max-h-60 overflow-y-auto">
+            <div class="absolute top-full left-0 right-0 mt-1 bg-md-primary-container rounded-xl shadow-lg border border-md-secondary-container z-50 max-h-60 overflow-y-auto">
               <button
-                class="w-full px-4 py-2 text-sm text-left hover:bg-base-200 flex items-center justify-between"
+                class="w-full px-4 py-2 text-sm text-left hover:bg-md-secondary-container flex items-center justify-between"
                 onclick={() => {
                   selectedProviderInstance = 'random';
                   onSetProviderInstance('random');
@@ -446,7 +442,7 @@ $effect(() => {
                 {@const pingResults = providerPingResults.get(selectedProvider)}
                 {@const instancePing = pingResults?.get(instance.id)}
                 <button
-                  class="w-full px-4 py-2 text-sm text-left hover:bg-base-200 flex items-center justify-between"
+                  class="w-full px-4 py-2 text-sm text-left hover:bg-md-secondary-container flex items-center justify-between"
                   onclick={() => {
                     selectedProviderInstance = instance.id;
                     onSetProviderInstance(instance.id);
@@ -455,9 +451,9 @@ $effect(() => {
                 >
                   <span>{instance.displayName}{instance.isCustom ? ' (Custom)' : ''}</span>
                   {#if instancePing !== undefined && instancePing !== null}
-                    <span class="text-xs text-base-content/50">{getPingDot(instancePing)} {PingService.formatPing(instancePing)}</span>
+                    <span class="text-xs text-md-on-surface/50">{getPingDot(instancePing)} {PingService.formatPing(instancePing)}</span>
                   {:else}
-                    <span class="text-xs text-base-content/50">⏳</span>
+                    <span class="text-xs text-md-on-surface/50">⏳</span>
                   {/if}
                 </button>
               {/each}
@@ -467,24 +463,24 @@ $effect(() => {
       </div>
 
       {#if !showCustomInstanceForm}
-        <button class="w-full rounded-xl border-2 border-dashed border-primary/30 py-2.5 flex items-center justify-center gap-2 text-sm text-primary/70 hover:border-primary/60 hover:text-primary transition-colors" aria-label="Add custom instance" onclick={showAddCustomInstance}>
+        <button class="w-full rounded-xl border-2 border-dashed border-md-primary/30 py-2.5 flex items-center justify-center gap-2 text-sm text-md-primary/70 hover:border-md-primary/60 hover:text-md-primary transition-colors" aria-label="Add custom instance" onclick={showAddCustomInstance}>
           <IconPlus class="w-4 h-4" />
           Add instance
         </button>
       {:else}
-        <div class="bg-base-100 rounded-xl px-4 py-3 space-y-3">
+        <div class="bg-md-tertiary-container rounded-xl px-4 py-3 space-y-3">
           <div>
-            <div class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5">Instance Name</div>
-            <input type="text" class="w-full bg-transparent text-sm outline-none text-base-content placeholder:text-base-content/30" placeholder="My Instance" aria-label="Custom instance name" bind:value={customInstanceName} />
+            <div class="text-xs font-semibold text-md-tertiary uppercase tracking-wider mb-1.5">Instance Name</div>
+            <input type="text" class="w-full bg-transparent text-sm outline-none text-md-on-surface placeholder:text-md-on-surface/30" placeholder="My Instance" aria-label="Custom instance name" bind:value={customInstanceName} />
           </div>
-          <div class="border-t border-base-200"></div>
+          <div class="border-t border-md-secondary-container"></div>
           <div>
-            <div class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5">API URL</div>
-            <input type="url" class="w-full bg-transparent text-sm outline-none text-base-content placeholder:text-base-content/30" placeholder="https://example.com/api" aria-label="Custom instance URL" bind:value={customInstanceUrl} />
+            <div class="text-[10px] font-semibold text-md-on-surface/40 uppercase tracking-wider mb-1.5">API URL</div>
+            <input type="url" class="w-full bg-transparent text-sm outline-none text-md-on-surface placeholder:text-md-on-surface/30" placeholder="https://example.com/api" aria-label="Custom instance URL" bind:value={customInstanceUrl} />
           </div>
           <div class="flex gap-2 pt-1">
-            <button class="btn btn-primary btn-sm flex-1 rounded-xl" onclick={saveCustomInstance}>Save</button>
-            <button class="btn btn-ghost btn-sm flex-1 rounded-xl" onclick={hideCustomInstanceForm}>Cancel</button>
+            <button class="flex-1 px-3 py-1.5 text-sm rounded-xl bg-md-primary text-md-on-primary hover:bg-md-primary/90 transition-colors" onclick={saveCustomInstance}>{$t('common.save')}</button>
+            <button class="flex-1 px-3 py-1.5 text-sm rounded-xl bg-md-secondary text-md-on-secondary hover:bg-md-secondary/90 transition-colors" onclick={hideCustomInstanceForm}>{$t('common.cancel')}</button>
           </div>
         </div>
       {/if}
@@ -494,25 +490,55 @@ $effect(() => {
   <!-- ── Appearance ── -->
   <section class="space-y-2">
     <div class="flex items-center gap-2 mb-1">
-      <IconSun class="w-4 h-4 text-primary" />
-      <span class="text-sm font-semibold text-base-content">Appearance</span>
+      <IconSun class="w-4 h-4 text-md-primary" />
+      <span class="text-sm font-semibold text-md-on-surface">{$t('settings.appearance')}</span>
     </div>
 
-    <div class="bg-base-100 rounded-xl px-4 py-3 flex items-center justify-between">
+    <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-center justify-between">
       <div>
-        <div class="text-sm font-medium text-base-content">Theme accent</div>
-        <div class="text-xs text-base-content/50">Browser color picker</div>
+        <div class="text-sm font-medium text-md-on-surface">Theme accent</div>
+        <div class="text-xs text-md-on-surface/50">Browser color picker</div>
       </div>
       <div class="flex items-center gap-2">
         {#if customColor}
-          <button class="btn btn-ghost btn-xs btn-circle" aria-label="Reset color" onclick={() => onColorChange('')}>
+          <button class="w-5 h-5 flex items-center justify-center rounded-full bg-transparent hover:bg-md-secondary-container transition-colors" aria-label="Reset color" onclick={() => onColorChange('')}>
             <IconX class="w-3 h-3" />
           </button>
         {/if}
         <label class="cursor-pointer relative">
-          <div class="w-8 h-8 rounded-full border-4 border-base-200 shadow-md" style="background:{customColor || 'var(--color-primary)'}"></div>
-          <input type="color" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" aria-label="Choose theme color" bind:value={customColor} oninput={(e) => onColorChange((e.target as HTMLInputElement).value)} />
+          <div class="w-8 h-8 rounded-full border-4 border-md-secondary-container shadow-md" style="background:{customColor || 'var(--md-primary)'}"></div>
+          <input type="color" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" aria-label="Choose theme color" value={customColor || '#4c662b'} oninput={(e) => onColorChange((e.target as HTMLInputElement).value)} />
         </label>
+      </div>
+    </div>
+
+    <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-center justify-between">
+      <div>
+        <div class="text-sm font-medium text-md-on-surface">Contrast level</div>
+        <div class="text-xs text-md-on-surface/50">Adjust contrast for accessibility</div>
+      </div>
+      <div class="flex items-center gap-1">
+        <button
+          class="px-3 py-1.5 text-xs rounded-lg transition-colors {contrastLevel === 'standard' ? 'bg-md-primary text-md-on-primary' : 'bg-md-secondary-container text-md-on-surface hover:bg-md-secondary-container/80'}"
+          onclick={() => onContrastLevelChange('standard')}
+          aria-label="Standard contrast"
+        >
+          Standard
+        </button>
+        <button
+          class="px-3 py-1.5 text-xs rounded-lg transition-colors {contrastLevel === 'medium' ? 'bg-md-primary text-md-on-primary' : 'bg-md-secondary-container text-md-on-surface hover:bg-md-secondary-container/80'}"
+          onclick={() => onContrastLevelChange('medium')}
+          aria-label="Medium contrast"
+        >
+          Medium
+        </button>
+        <button
+          class="px-3 py-1.5 text-xs rounded-lg transition-colors {contrastLevel === 'high' ? 'bg-md-primary text-md-on-primary' : 'bg-md-secondary-container text-md-on-surface hover:bg-md-secondary-container/80'}"
+          onclick={() => onContrastLevelChange('high')}
+          aria-label="High contrast"
+        >
+          High
+        </button>
       </div>
     </div>
   </section>
@@ -520,40 +546,46 @@ $effect(() => {
   <!-- ── Developer Settings ── -->
   <section class="space-y-2">
     <div class="flex items-center gap-2 mb-1">
-      <IconSettings class="w-4 h-4 text-primary" />
-      <span class="text-sm font-semibold text-base-content">Developer Settings</span>
+      <IconSettings class="w-4 h-4 text-md-primary" />
+      <span class="text-sm font-semibold text-md-on-surface">{$t('settings.developer')}</span>
     </div>
 
-    <div class="bg-base-100 rounded-xl px-4 py-3 flex items-center justify-between">
+    <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-center justify-between">
       <div>
-        <div class="text-sm font-medium text-base-content">Show Developer Options</div>
-        <div class="text-xs text-base-content/50">Enable developer tools</div>
+        <div class="text-sm font-medium text-md-on-surface">Show Developer Options</div>
+        <div class="text-xs text-md-on-surface/50">Enable developer tools</div>
       </div>
-      <input type="checkbox" class="toggle toggle-primary toggle-sm" aria-label="Toggle developer settings" bind:checked={showDeveloperSettings} onchange={onToggleDeveloperSettings} />
+      <label class="cursor-pointer">
+        <input type="checkbox" class="sr-only peer" aria-label="Toggle developer settings" bind:checked={showDeveloperSettings} onchange={onToggleDeveloperSettings} />
+        <div class="relative w-9 h-5 bg-md-outline-variant peer-checked:bg-md-primary rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+      </label>
     </div>
 
     {#if showDeveloperSettings}
-      <div class="bg-base-100 rounded-xl px-4 py-3 flex items-center justify-between">
+      <div class="bg-md-primary-container rounded-xl px-4 py-3 flex items-center justify-between">
         <div>
-          <div class="text-sm font-medium text-base-content">Enable Logging</div>
-          <div class="text-xs text-base-content/50">Show console logs for debugging</div>
+          <div class="text-sm font-medium text-md-on-surface">Enable Logging</div>
+          <div class="text-xs text-md-on-surface/50">Show console logs for debugging</div>
         </div>
-        <input type="checkbox" class="toggle toggle-primary toggle-sm" aria-label="Toggle logging" bind:checked={enableLogging} onchange={onToggleEnableLogging} />
+        <label class="cursor-pointer">
+          <input type="checkbox" class="sr-only peer" aria-label="Toggle logging" bind:checked={enableLogging} onchange={onToggleEnableLogging} />
+          <div class="relative w-9 h-5 bg-md-outline-variant peer-checked:bg-md-primary rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+        </label>
       </div>
     {/if}
   </section>
 
   <!-- ── Data ── -->
   <div class="flex gap-2">
-    <button class="btn btn-outline btn-sm flex-1 rounded-xl" aria-label="Export data" onclick={onExportData}>Export Data</button>
-    <button class="btn btn-outline btn-sm flex-1 rounded-xl" aria-label="Import data" onclick={onImportData}>Import Data</button>
+    <button class="flex-1 px-3 py-1.5 text-sm rounded-xl border border-md-primary text-md-primary hover:bg-md-primary/10 transition-colors" aria-label="Export data" onclick={onExportData}>Export Data</button>
+    <button class="flex-1 px-3 py-1.5 text-sm rounded-xl border border-md-primary text-md-primary hover:bg-md-primary/10 transition-colors" aria-label="Import data" onclick={onImportData}>Import Data</button>
   </div>
 
   <!-- ── Danger Zone ── -->
-  <section class="rounded-xl border border-error/30 bg-error/5 px-4 py-4 space-y-2">
-    <div class="text-sm font-bold text-error">Danger Zone</div>
-    <div class="text-xs text-base-content/50">Irreversibly reset all configuration to factory defaults.</div>
-    <button class="w-full btn btn-outline btn-error btn-sm rounded-xl mt-1 font-semibold" aria-label="Perform hard reset" onclick={() => showConfirmDialog('Are you sure you want to perform a hard reset? This action cannot be undone.', onHardReset)}>Hard Reset</button>
+  <section class="rounded-xl border border-md-error/30 bg-md-error/5 px-4 py-4 space-y-2">
+    <div class="text-sm font-bold text-md-error">Danger Zone</div>
+    <div class="text-xs text-md-on-surface/50">Irreversibly reset all configuration to factory defaults.</div>
+    <button class="w-full px-3 py-1.5 text-sm rounded-xl border border-md-error text-md-error hover:bg-md-error/10 mt-1 font-semibold transition-colors" aria-label="Perform hard reset" onclick={() => showConfirmDialog('Are you sure you want to perform a hard reset? This action cannot be undone.', onHardReset)}>Hard Reset</button>
   </section>
 
 </div>
@@ -561,5 +593,4 @@ $effect(() => {
 
 <ConfirmDialog {confirmDialog} confirmDialogRef={confirmDialogRef} onClose={closeConfirmDialog} />
 
-<ConfirmDialog {confirmDialog} confirmDialogRef={confirmDialogRef} onClose={closeConfirmDialog} />
-<ConfirmDialog {confirmDialog} confirmDialogRef={confirmDialogRef} onClose={closeConfirmDialog} />
+<ToastContainer />

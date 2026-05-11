@@ -1,13 +1,13 @@
 import { TOAST_DEFAULT_DURATION_MS } from '@/utils/constants.js';
 
-const DEFAULT_ERROR_COLOR = 'var(--color-error)';
-const DEFAULT_SUCCESS_COLOR = 'var(--color-success)';
+const DEFAULT_ERROR_COLOR = 'var(--md-error)';
+const DEFAULT_SUCCESS_COLOR = 'var(--md-success)';
 
 async function getCssColors(): Promise<{ error: string; success: string }> {
   try {
     const root = document.documentElement;
-    const errorColor = getComputedStyle(root).getPropertyValue('--color-error').trim();
-    const successColor = getComputedStyle(root).getPropertyValue('--color-success').trim();
+    const errorColor = getComputedStyle(root).getPropertyValue('--md-error').trim();
+    const successColor = getComputedStyle(root).getPropertyValue('--md-success').trim();
     return {
       error: errorColor || DEFAULT_ERROR_COLOR,
       success: successColor || DEFAULT_SUCCESS_COLOR,
@@ -39,7 +39,7 @@ export async function showTooltip(
     max-width: 250px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
     transition: opacity 0.3s;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: system-ui, sans-serif;
   `;
 
   const rect = element.getBoundingClientRect();
